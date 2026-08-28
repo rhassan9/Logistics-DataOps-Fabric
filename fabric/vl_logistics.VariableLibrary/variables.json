@@ -1,0 +1,29 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/variableLibrary/definition/variables/1.0.0/schema.json",
+  "variables": [
+    {
+      "name": "neon_host",
+      "note": "",
+      "type": "String",
+      "value": "ep-divine-cloud-b2fwle17.c-6.eu-central-1.aws.neon.tech"
+    },
+    {
+      "name": "neon_database",
+      "note": "",
+      "type": "String",
+      "value": "neondb"
+    },
+    {
+      "name": "neon_user",
+      "note": "",
+      "type": "String",
+      "value": "neondb_owner"
+    },
+    {
+      "name": "keyvault_uri",
+      "note": "",
+      "type": "String",
+      "value": ""
+    }
+  ]
+}
