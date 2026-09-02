@@ -1,0 +1,309 @@
+{
+  "properties": {
+    "jobMode": "Batch",
+    "source": {
+      "type": "PostgreSqlTable",
+      "connectionSettings": {
+        "type": "PostgreSql",
+        "externalReferences": {
+          "connection": "325f153b-c5f0-4a2b-9138-f2c6213e61ec"
+        }
+      }
+    },
+    "destination": {
+      "type": "LakehouseTable",
+      "connectionSettings": {
+        "type": "Lakehouse",
+        "typeProperties": {
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "artifactId": "9875ec2d-a439-952e-4b47-1ffa998bc820",
+          "rootFolder": "Tables"
+        }
+      }
+    },
+    "policy": {
+      "timeout": "0.12:00:00",
+      "retry": 0
+    }
+  },
+  "activities": [
+    {
+      "id": "f842c6f7-4c7a-4c18-aef6-e122b98d99de",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "customers"
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "customers"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator",
+          "mappings": [
+            {
+              "source": {
+                "name": "customer_id",
+                "type": "String",
+                "physicalType": "character varying"
+              },
+              "destination": {
+                "name": "customer_id",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "customer_name",
+                "type": "String",
+                "physicalType": "text"
+              },
+              "destination": {
+                "name": "customer_name",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "customer_type",
+                "type": "String",
+                "physicalType": "text"
+              },
+              "destination": {
+                "name": "customer_type",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "credit_terms_days",
+                "type": "Int32",
+                "physicalType": "integer"
+              },
+              "destination": {
+                "name": "credit_terms_days",
+                "physicalType": "integer"
+              }
+            },
+            {
+              "source": {
+                "name": "primary_freight_type",
+                "type": "String",
+                "physicalType": "text"
+              },
+              "destination": {
+                "name": "primary_freight_type",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "account_status",
+                "type": "String",
+                "physicalType": "text"
+              },
+              "destination": {
+                "name": "account_status",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "contract_start_date",
+                "type": "DateTime",
+                "physicalType": "date"
+              },
+              "destination": {
+                "name": "contract_start_date",
+                "physicalType": "timestamp"
+              }
+            },
+            {
+              "source": {
+                "name": "annual_revenue_potential",
+                "type": "Decimal",
+                "physicalType": "numeric"
+              },
+              "destination": {
+                "name": "annual_revenue_potential",
+                "physicalType": "decimal",
+                "scale": 18,
+                "precision": 38
+              }
+            }
+          ]
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "d6c0eb5e-33ca-400e-9fda-8264dd335a69",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "drivers"
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "drivers"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "519e4353-66b9-4b7e-8134-5f94d5ae0f72",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "facilities"
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "facilities"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "ed1ab0fc-c1c6-4d2a-9881-3a62242b4a99",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "routes"
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "routes"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "9d66f4c5-d193-440d-9520-cb4cea5ee7fb",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "trailers"
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "trailers"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "de637cfd-96f2-4278-aaa3-d461220ef8b9",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "trucks"
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "trucks"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    }
+  ]
+}

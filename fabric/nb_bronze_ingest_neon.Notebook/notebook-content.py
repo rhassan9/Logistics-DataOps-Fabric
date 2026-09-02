@@ -46,12 +46,6 @@
 #  do not control, so no schema changes were made there to simplify ingestion.
 #  Every accommodation is made inside the medallion.
 # 
-#  Aggregate tables excluded. The source export includes driver_monthly_metrics
-#  and truck_utilization_metrics. Those are OLAP artifacts; an operational
-#  database would not store pre-computed monthly rollups. They are rebuilt in
-#  wh_logistics_gold from the transactional tables, which also validates the
-#  aggregation logic against a known answer.
-# 
 #  Inclusive watermark. Incremental reads use >= rather than >, so rows sharing
 #  the highest watermark value are never skipped. On a DATE column this is not
 #  an edge case: 85,410 loads span roughly 1,095 dates, so about 78 rows share
@@ -66,6 +60,12 @@
 #  V-Order left disabled. Bronze is read by Spark, which gains nothing from
 #  V-Order while paying 15 to 33 percent slower writes. It is enabled in gold,
 #  where Direct Lake benefits from it.
+# 
+# **Document read partitioning benchmark results**:
+# Measured fuel_purchases (196,442 rows) at 0, 4 and 8 JDBC read
+# partitions: 5.5s, 5.8s, 5.0s. No benefit at this volume. Partitioning
+# retained as a demonstration with the measurements recorded inline.
+# Copy job on the same table averages ~60s.
 # 
 #  ---------------------------------------------------------------------------
 # ### CONFIGURATION
@@ -176,9 +176,6 @@ print(f"read partitions : {READ_PARTITIONS} ({partitions_source})")
 # ===========================================================================
 # getSecret authenticates as the identity running the notebook, and notebook
 # output redacts secret values automatically.
-#
-# Until Key Vault is provisioned, define _local_password in a scratch cell for
-# the session and delete that cell before committing.
  
 SECRET_NAME = "neon-logistics-password"
  
@@ -303,6 +300,19 @@ def read_source(table_name, cfg):
         # into tens of thousands of network calls to Frankfurt.
         .option("fetchsize", "10000")
     )
+
+    # JDBC read partitioning: splits the read across N parallel connections
+    # to the source. RETAINED AS A DEMONSTRATION, not because it helps here.
+    #
+    # Benchmarked on fuel_purchases (196,442 rows, ~40 MB):
+    #     0 partitions  5.5s
+    #     4 partitions  5.8s
+    #     8 partitions  5.0s
+    #
+    # No measurable benefit at this volume. Connection setup, TLS negotiation
+    # and query planning across N connections offset the transfer saving.
+    # Parallel reads pay off once transfer time dominates setup cost, which
+    # is well above this dataset's size.
  
     if cfg.get("partition_read") and load_mode == "full":
         reader = (

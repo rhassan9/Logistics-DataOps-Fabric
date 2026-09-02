@@ -1,0 +1,401 @@
+{
+  "properties": {
+    "jobMode": "CDC",
+    "fullLoadBehavior": "Truncate",
+    "source": {
+      "type": "PostgreSqlTable",
+      "connectionSettings": {
+        "type": "PostgreSql",
+        "externalReferences": {
+          "connection": "325f153b-c5f0-4a2b-9138-f2c6213e61ec"
+        }
+      }
+    },
+    "destination": {
+      "type": "LakehouseTable",
+      "connectionSettings": {
+        "type": "Lakehouse",
+        "typeProperties": {
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "artifactId": "9875ec2d-a439-952e-4b47-1ffa998bc820",
+          "rootFolder": "Tables"
+        }
+      }
+    },
+    "policy": {
+      "timeout": "0.12:00:00",
+      "retry": 0
+    }
+  },
+  "activities": [
+    {
+      "id": "63a7ee4b-f122-4ce1-a908-0eb1e4949fdd",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "delivery_events"
+          },
+          "changeDataSettings": {
+            "readMethod": "SnapshotPlusIncremental",
+            "columns": [
+              {
+                "name": "actual_datetime",
+                "type": "DateTime",
+                "physicalType": "timestamp without time zone"
+              }
+            ]
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "delivery_events"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator",
+          "mappings": [
+            {
+              "source": {
+                "name": "event_id",
+                "type": "String",
+                "physicalType": "character varying"
+              },
+              "destination": {
+                "name": "event_id",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "load_id",
+                "type": "String",
+                "physicalType": "character varying"
+              },
+              "destination": {
+                "name": "load_id",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "trip_id",
+                "type": "String",
+                "physicalType": "character varying"
+              },
+              "destination": {
+                "name": "trip_id",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "event_type",
+                "type": "String",
+                "physicalType": "text"
+              },
+              "destination": {
+                "name": "event_type",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "facility_id",
+                "type": "String",
+                "physicalType": "character varying"
+              },
+              "destination": {
+                "name": "facility_id",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "scheduled_datetime",
+                "type": "DateTime",
+                "physicalType": "timestamp without time zone"
+              },
+              "destination": {
+                "name": "scheduled_datetime",
+                "physicalType": "timestamp"
+              }
+            },
+            {
+              "source": {
+                "name": "actual_datetime",
+                "type": "DateTime",
+                "physicalType": "timestamp without time zone"
+              },
+              "destination": {
+                "name": "actual_datetime",
+                "physicalType": "timestamp"
+              }
+            },
+            {
+              "source": {
+                "name": "detention_minutes",
+                "type": "Int32",
+                "physicalType": "integer"
+              },
+              "destination": {
+                "name": "detention_minutes",
+                "physicalType": "integer"
+              }
+            },
+            {
+              "source": {
+                "name": "on_time_flag",
+                "type": "Boolean",
+                "physicalType": "boolean"
+              },
+              "destination": {
+                "name": "on_time_flag",
+                "physicalType": "boolean"
+              }
+            },
+            {
+              "source": {
+                "name": "location_city",
+                "type": "String",
+                "physicalType": "text"
+              },
+              "destination": {
+                "name": "location_city",
+                "physicalType": "string"
+              }
+            },
+            {
+              "source": {
+                "name": "location_state",
+                "type": "String",
+                "physicalType": "character varying"
+              },
+              "destination": {
+                "name": "location_state",
+                "physicalType": "string"
+              }
+            }
+          ]
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "f6cc69db-2562-48e8-912c-fc557c6e00f4",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "fuel_purchases"
+          },
+          "changeDataSettings": {
+            "readMethod": "SnapshotPlusIncremental",
+            "columns": [
+              {
+                "name": "purchase_date",
+                "type": "DateTime",
+                "physicalType": "timestamp without time zone"
+              }
+            ]
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "fuel_purchases"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "2c1aaf69-b8bb-4075-b41d-b058a6322e7a",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "loads"
+          },
+          "changeDataSettings": {
+            "readMethod": "SnapshotPlusIncremental",
+            "columns": [
+              {
+                "name": "load_date",
+                "type": "DateTime",
+                "physicalType": "date"
+              }
+            ]
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "loads"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "62fe8b90-5c44-4ca4-b3ff-9fe4381becbb",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "maintenance_records"
+          },
+          "changeDataSettings": {
+            "readMethod": "SnapshotPlusIncremental",
+            "columns": [
+              {
+                "name": "maintenance_date",
+                "type": "DateTime",
+                "physicalType": "date"
+              }
+            ]
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "maintenance_records"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "1051578e-e21f-48d4-a50f-e39ead2476e4",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "safety_incidents"
+          },
+          "changeDataSettings": {
+            "readMethod": "SnapshotPlusIncremental",
+            "columns": [
+              {
+                "name": "incident_date",
+                "type": "DateTime",
+                "physicalType": "timestamp without time zone"
+              }
+            ]
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "safety_incidents"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "136dcc4d-4e98-4da9-a090-8e0190f21b89",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "schema": "public",
+            "table": "trips"
+          },
+          "changeDataSettings": {
+            "readMethod": "SnapshotPlusIncremental",
+            "columns": [
+              {
+                "name": "dispatch_date",
+                "type": "DateTime",
+                "physicalType": "date"
+              }
+            ]
+          }
+        },
+        "destination": {
+          "writeBehavior": "Append",
+          "datasetSettings": {
+            "schema": "public",
+            "table": "trips"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false,
+          "enableChangeDataFeed": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    }
+  ]
+}
