@@ -33,12 +33,12 @@ Neon PostgreSQL (OLTP source)
 ```
 
 **Bronze** preserves source data exactly as it arrives, append-only, with row-level lineage. Implemented twice, as a Spark notebook and as a Fabric Copy job, and compared.
-See [docs/bronze.md](docs/bronze.md).
+See [docs/bronze.md](docs/Bronze.md).
 
 **Silver** cleans, conforms and deduplicates into one validated row per business entity,
 with MERGE-based SCD Type 1 loads and change data feed enabled for gold. Transactional
 tables are built with a Spark notebook, reference tables with Dataflow Gen2.
-See [docs/silver.md](docs/silver.md).
+See [docs/silver.md](docs/Silver.md).
 
 **Gold** is a Kimball star schema built with T-SQL stored procedures and served through a DirectLake semantic model. Planned.
 
