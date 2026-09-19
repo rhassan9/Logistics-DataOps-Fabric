@@ -35,7 +35,10 @@ Neon PostgreSQL (OLTP source)
 **Bronze** preserves source data exactly as it arrives, append-only, with row-level lineage. Implemented twice, as a Spark notebook and as a Fabric Copy job, and compared.
 See [docs/bronze.md](docs/bronze.md).
 
-**Silver** cleans, conforms and deduplicates. In progress.
+**Silver** cleans, conforms and deduplicates into one validated row per business entity,
+with MERGE-based SCD Type 1 loads and change data feed enabled for gold. Transactional
+tables are built with a Spark notebook, reference tables with Dataflow Gen2.
+See [docs/silver.md](docs/silver.md).
 
 **Gold** is a Kimball star schema built with T-SQL stored procedures and served through a DirectLake semantic model. Planned.
 
@@ -141,8 +144,8 @@ The two pre-aggregated tables in the Kaggle export are not loaded. They are OLAP
 | Milestone | Status |
 |---|---|
 | M1 Bronze ingestion | Complete |
-| M2 Silver transformation | In progress |
-| M3 Gold star schema and semantic model | Planned |
+| M2 Silver transformation | Complete |
+| M3 Gold star schema and semantic model | In Progress |
 | M4 Deployment pipelines and CI/CD | Planned |
 | M5 Eventhouse and KQL | Planned |
 | M6 dbt vs Fabric comparison write-up | Planned |
