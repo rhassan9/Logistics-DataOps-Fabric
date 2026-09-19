@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Dataflow",
+    "displayName": "df_lh_logistics_bronze_to_silver"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "f0058280-b268-957d-4b55-4839be2a4f26"
+  }
+}

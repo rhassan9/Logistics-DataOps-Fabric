@@ -1,0 +1,89 @@
+{
+  "formatVersion": "202502",
+  "computeEngineSettings": {
+    "allowModernEvaluationEngine": true
+  },
+  "name": "df_lh_logistics_bronze_to_silver",
+  "queryGroups": [],
+  "documentLocale": "en-US",
+  "queriesMetadata": {
+    "silver_customers": {
+      "queryId": "43579b6d-6f9b-4761-9117-d7c5dbf3d9e2",
+      "queryName": "silver_customers",
+      "loadEnabled": false
+    },
+    "silver_drivers": {
+      "queryId": "452e077e-6584-4d65-b84c-d327327dc41d",
+      "queryName": "silver_drivers",
+      "loadEnabled": false
+    },
+    "silver_facilities": {
+      "queryId": "fc6e8a0e-8400-4558-8ac2-94600acf21d6",
+      "queryName": "silver_facilities",
+      "loadEnabled": false
+    },
+    "silver_routes": {
+      "queryId": "79387d20-a5a1-42f7-a5df-205cab2a73af",
+      "queryName": "silver_routes",
+      "loadEnabled": false
+    },
+    "silver_trailers": {
+      "queryId": "1c7ba9c4-971b-4bb4-8fcb-fdd5cf22f817",
+      "queryName": "silver_trailers",
+      "loadEnabled": false
+    },
+    "silver_trucks": {
+      "queryId": "999e1a70-4991-4568-a1c7-e41ec1ba6a58",
+      "queryName": "silver_trucks",
+      "loadEnabled": false
+    },
+    "as_of_date": {
+      "queryId": "af8c4ac2-447b-4a37-a83b-7fa74f8a06b4",
+      "queryName": "as_of_date",
+      "loadEnabled": false
+    },
+    "silver_drivers_DataDestination": {
+      "queryId": "923321c8-53b0-4ff6-bd9c-ea2cf034056a",
+      "queryName": "silver_drivers_DataDestination",
+      "isHidden": true,
+      "loadEnabled": false
+    },
+    "silver_customers_DataDestination": {
+      "queryId": "0b9adf5f-8135-41d6-9f9c-279e6fcbb156",
+      "queryName": "silver_customers_DataDestination",
+      "isHidden": true,
+      "loadEnabled": false
+    },
+    "silver_facilities_DataDestination": {
+      "queryId": "762bc8ac-860f-43c8-aa68-e897716b6b34",
+      "queryName": "silver_facilities_DataDestination",
+      "isHidden": true,
+      "loadEnabled": false
+    },
+    "silver_routes_DataDestination": {
+      "queryId": "9615342e-2cd3-48e4-b77b-8d3e273deba3",
+      "queryName": "silver_routes_DataDestination",
+      "isHidden": true,
+      "loadEnabled": false
+    },
+    "silver_trailers_DataDestination": {
+      "queryId": "cdfb78d6-1c94-4fda-b185-59e7ef193eb2",
+      "queryName": "silver_trailers_DataDestination",
+      "isHidden": true,
+      "loadEnabled": false
+    },
+    "silver_trucks_DataDestination": {
+      "queryId": "47f085c5-95b7-4ccf-93b3-746ca4dd91d2",
+      "queryName": "silver_trucks_DataDestination",
+      "isHidden": true,
+      "loadEnabled": false
+    }
+  },
+  "connections": [
+    {
+      "path": "Lakehouse",
+      "kind": "Lakehouse",
+      "connectionId": "{\"ClusterId\":\"40b05006-b0ec-48f7-b28a-7b0d5ec0e6ce\",\"DatasourceId\":\"9298a10d-3edf-4d29-8144-74c7bad64754\"}"
+    }
+  ]
+}
