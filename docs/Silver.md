@@ -220,8 +220,7 @@ mechanism can be demonstrated against generated data.
 
 ## Maintenance
 
-`OPTIMIZE` and `VACUUM` are Spark SQL commands and are not supported in the SQL analytics
-endpoint or the warehouse editor. Run them from a notebook.
+Run them from a notebook.
 
 ```python
 LARGE_TABLES = ["loads", "trips", "delivery_events", "fuel_purchases"]
