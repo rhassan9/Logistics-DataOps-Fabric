@@ -1323,6 +1323,122 @@ print(f"\nProfile {RUN_ID} complete.")
 
 # CELL ********************
 
+# MAGIC %%sql
+# MAGIC SELECT
+# MAGIC     month(load_date)                                          AS month_of_year,
+# MAGIC     round(avg(daily_loads), 1)                                AS avg_loads_per_day,
+# MAGIC     round(stddev(daily_loads), 1)                             AS stddev,
+# MAGIC     min(daily_loads)                                          AS min_day,
+# MAGIC     max(daily_loads)                                          AS max_day
+# MAGIC FROM (
+# MAGIC     SELECT load_date, count(*) AS daily_loads
+# MAGIC     FROM lh_logistics_silver.dbo.silver_loads
+# MAGIC     GROUP BY load_date
+# MAGIC )
+# MAGIC GROUP BY month(load_date)
+# MAGIC ORDER BY month_of_year
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# MAGIC %%sql
+# MAGIC WITH service_intervals AS (
+# MAGIC     SELECT
+# MAGIC         truck_id,
+# MAGIC         maintenance_date,
+# MAGIC         service_urgency,
+# MAGIC         odometer_reading,
+# MAGIC         odometer_reading - lag(odometer_reading)
+# MAGIC             OVER (PARTITION BY truck_id ORDER BY maintenance_date) AS miles_since_last_service
+# MAGIC     FROM lh_logistics_silver.dbo.silver_maintenance_records
+# MAGIC )
+# MAGIC SELECT
+# MAGIC     floor(miles_since_last_service / 10000) * 10000            AS miles_bucket,
+# MAGIC     count(*)                                                   AS events,
+# MAGIC     sum(CASE WHEN service_urgency = 'Emergency' THEN 1 ELSE 0 END) AS emergencies,
+# MAGIC     round(100.0 * sum(CASE WHEN service_urgency = 'Emergency' THEN 1 ELSE 0 END)
+# MAGIC           / count(*), 1)                                       AS emergency_pct
+# MAGIC FROM service_intervals
+# MAGIC WHERE miles_since_last_service > 0
+# MAGIC GROUP BY floor(miles_since_last_service / 10000) * 10000
+# MAGIC ORDER BY miles_bucket
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# MAGIC %%sql
+# MAGIC SELECT
+# MAGIC     service_urgency,
+# MAGIC     count(*)                                AS events,
+# MAGIC     round(avg(total_cost), 2)               AS avg_cost,
+# MAGIC     round(avg(labor_hours), 2)              AS avg_labor_hours,
+# MAGIC     round(avg(downtime_hours), 2)           AS avg_downtime,
+# MAGIC     round(avg(parts_cost), 2)               AS avg_parts
+# MAGIC FROM lh_logistics_silver.dbo.silver_maintenance_records
+# MAGIC GROUP BY service_urgency
+# MAGIC ORDER BY avg_cost DESC
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# MAGIC %%sql
+# MAGIC SELECT
+# MAGIC     floor(m.odometer_reading / 100000) * 100000   AS odometer_bucket,
+# MAGIC     count(*)                                       AS events,
+# MAGIC     round(100.0 * sum(CASE WHEN m.service_urgency = 'Emergency'
+# MAGIC                            THEN 1 ELSE 0 END) / count(*), 1) AS emergency_pct,
+# MAGIC     round(avg(m.total_cost), 2)                    AS avg_cost
+# MAGIC FROM lh_logistics_silver.dbo.silver_maintenance_records m
+# MAGIC GROUP BY floor(m.odometer_reading / 100000) * 100000
+# MAGIC ORDER BY odometer_bucket
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# MAGIC %%sql
+# MAGIC SELECT
+# MAGIC     t.model_year,
+# MAGIC     count(*)                        AS events,
+# MAGIC     round(avg(m.total_cost), 2)     AS avg_cost,
+# MAGIC     round(avg(m.downtime_hours), 2) AS avg_downtime
+# MAGIC FROM lh_logistics_silver.dbo.silver_maintenance_records m
+# MAGIC JOIN lh_logistics_silver.dbo.silver_trucks t ON m.truck_id = t.truck_id
+# MAGIC GROUP BY t.model_year
+# MAGIC ORDER BY t.model_year
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
 
 # METADATA ********************
 

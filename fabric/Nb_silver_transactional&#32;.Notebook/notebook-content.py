@@ -214,6 +214,7 @@ def align_to_target(df, target):
  
     return df.select(*target_cols)
  
+NON_BUSINESS = {"_silver_run_id", "_source_ingest_date"} 
  
 def write_silver(df, table_name, business_key):
     """MERGE into an existing silver table."""
@@ -227,13 +228,22 @@ def write_silver(df, table_name, business_key):
  
     aligned = align_to_target(df, target)
  
+    changed = " OR ".join(
+        f"NOT (t.`{c}` <=> s.`{c}`)"
+        for c in aligned.columns
+        if c not in NON_BUSINESS and c != business_key
+    )
+
     (
         DeltaTable.forName(spark, target).alias("t")
         .merge(aligned.alias("s"), f"t.{business_key} = s.{business_key}")
-        .whenMatchedUpdate(set={
-            **{c: F.col(f"s.{c}") for c in aligned.columns},
-            "_silver_updated_at": F.current_timestamp(),
-        })
+        .whenMatchedUpdate(
+            condition=changed,
+            set={
+                **{c: F.col(f"s.{c}") for c in aligned.columns},
+                "_silver_updated_at": F.current_timestamp(),
+            },
+        )
         .whenNotMatchedInsert(values={
             **{c: F.col(f"s.{c}") for c in aligned.columns},
             "_silver_created_at": F.current_timestamp(),
@@ -573,6 +583,49 @@ print(f"run {RUN_ID} logged")
 
 # META {
 # META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Table maintenance. Run after a large load, not on every refresh.
+#
+# OPTIMIZE compacts the small files that parallel writes produce.
+# VACUUM removes files no longer referenced by the transaction log. Seven days
+# is the floor: shorter windows break time travel and can remove change data
+# feed history before gold has consumed it.
+
+LARGE_TABLES = ["loads", "trips", "delivery_events", "fuel_purchases"]
+
+for t in LARGE_TABLES:
+    target = f"lh_logistics_silver.dbo.silver_{t}"
+    print(f"OPTIMIZE {target}")
+    spark.sql(f"OPTIMIZE {target}")
+
+for t in LARGE_TABLES:
+    target = f"lh_logistics_silver.dbo.silver_{t}"
+    print(f"VACUUM {target}")
+    spark.sql(f"VACUUM {target} RETAIN 168 HOURS")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+for t in ["customers", "drivers", "trucks", "trailers", "routes", "facilities"]:
+    spark.sql(f"""
+        ALTER TABLE lh_logistics_silver.dbo.silver_{t}
+        SET TBLPROPERTIES (delta.enableChangeDataFeed = false)
+    """)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
 

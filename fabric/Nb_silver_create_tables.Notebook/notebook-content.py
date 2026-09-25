@@ -100,18 +100,23 @@ drop_existing = False   # True rebuilds every table. Destroys all silver data.
 SILVER_LAKEHOUSE = "lh_logistics_silver"
 SILVER_SCHEMA = "dbo"
  
-# Properties applied to every silver table.
+# Properties differ by table type.
+# Transactional tables keep CDF enabled because they may be consumed
+# incrementally by downstream Spark/Delta processes.
 #
-# enableChangeDataFeed       gold reads silver incrementally through the feed
-# deletedFileRetentionDuration  seven days is the floor; shorter windows break
-#                            time travel and can remove CDF history before a
-#                            downstream consumer has read it
-TABLE_PROPERTIES = """
+# Reference tables are Replace-loaded by Dataflow Gen2, so CDF is
+# intentionally disabled to avoid meaningless delete/insert change noise.
+
+TRANSACTIONAL_PROPERTIES = """
 TBLPROPERTIES (
     delta.enableChangeDataFeed = 'true',
     delta.deletedFileRetentionDuration = 'interval 7 days'
-)
-"""
+)"""
+
+REFERENCE_PROPERTIES = """
+TBLPROPERTIES (
+    delta.deletedFileRetentionDuration = 'interval 7 days'
+)"""
  
 # Audit columns carried by every silver table.
 #
@@ -453,12 +458,18 @@ for name, columns in ALL_TABLES.items():
         existing.append(name)
         continue
  
+    properties = (
+        REFERENCE_PROPERTIES
+        if name in REFERENCE_TABLES
+        else TRANSACTIONAL_PROPERTIES
+    )
+
     spark.sql(f"""
         CREATE TABLE {target} (
         {columns}
         )
         USING DELTA
-        {TABLE_PROPERTIES}
+        {properties}
     """)
     created.append(name)
  
@@ -502,9 +513,14 @@ for name in ALL_TABLES:
     retention = props.get("delta.deletedFileRetentionDuration", "default")
     n_cols    = len(spark.table(target).columns)
  
-    if cdf != "true":
-        problems.append(name)
- 
+    expected_cdf = name not in REFERENCE_TABLES
+
+    if expected_cdf and cdf != "true":
+        problems.append(f"{name} (CDF missing)")
+
+    if not expected_cdf and cdf == "true":
+        problems.append(f"{name} (CDF should be off)")
+
     print(f"{name:<26}{cdf:>8}{retention:>22}{n_cols:>9}")
  
 print("-" * 65)
