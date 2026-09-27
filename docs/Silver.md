@@ -12,7 +12,7 @@ Writes are MERGE on the business key, so loads are idempotent and silver holds c
 |---|---|---|
 | `nb_silver_create_tables` | DDL for all 12 tables | once per environment |
 | `nb_silver_transactional` | 6 transactional tables | every batch |
-| 6 Dataflow Gen2 flows | 6 reference tables | every batch |
+| `df_lh_logistics_bronze_to_silver`, one Dataflow Gen2 with six queries | 6 reference tables | every batch |
 
 DDL is separate from transformation because structure and content have different lifecycles. The split also forces change data feed to be enabled at creation rather than after the first write, which matters because CDF captures nothing retrospectively: a table created by its first load would leave that load permanently outside the feed.
 
@@ -61,9 +61,9 @@ reprocess the entire table.
 
 | Property | Value | Reason |
 |---|---|---|
-| `delta.enableChangeDataFeed` | `true` on transactional tables, `false` on reference tables | see below |
+| `delta.enableChangeDataFeed` | `true` on transactional tables, not set (off) on reference tables | see below |
 | `delta.deletedFileRetentionDuration` | 7 days | shorter windows break time travel and remove change data before a consumer can read it |
-| V-Order | off | silver is a MERGE-heavy intermediate layer where write cost matters more than read speed, and each row is read roughly once per batch. V-Order does improve Spark and SQL reads, which is why gold keeps it on as the serving layer |
+| V-Order | off on transactional tables, on for reference tables | the transactional tables are MERGE-heavy, write cost matters more than read speed there, and each row is read roughly once per batch, so they keep the new-workspace Spark default of off. The reference tables are written by Dataflow Gen2, whose Lakehouse destination applies V-Order by default (`EnableVorder = true` on all six destinations); at 758 rows the write cost is immaterial. V-Order does improve Spark and SQL reads, which is why gold, a warehouse, keeps its default of on |
 
 **Change data feed is kept on the six transactional tables but not consumed by gold.** Gold is a Fabric Warehouse reading silver through the SQL analytics endpoint, which exposes the current table snapshot rather than the change feed. Gold extracts incrementally on
 `_silver_updated_at` instead. CDF stays enabled deliberately, to support future Spark-based incremental processing and materialized lake views, whose incremental refresh relies on it. It is off on the reference tables, for the reason given under Reference tables.
@@ -115,8 +115,7 @@ text, so the planned NLP step was dropped in favour of a string split.
 
 ### Nulls preserved
 
-Seven foreign key columns carry nulls at around two percent. This is an intentional characteristic of the source, not an error, so silver preserves them. Gold resolves them to Unknown dimension members, since Fabric Warehouse does not enforce foreign keys and an
-unmatched key would silently disappear from an inner join.
+Seven foreign key columns carry nulls at around two percent. This is an intentional characteristic of the source, not an error, so silver preserves them. Gold resolves them to the Missing dimension member (key 0), which is distinct from Unknown (key -1), the member for a value that exists but fails its lookup. Fabric Warehouse does not enforce foreign keys, so an unresolved key would otherwise silently disappear from an inner join.
 
 ---
 

@@ -29,18 +29,22 @@ Neon PostgreSQL (OLTP source)
    └──────────────────────────────┘
               │
               ▼
-   DirectLake semantic model → Power BI
+   Direct Lake semantic model → Power BI
 ```
+
+`lh_logistics_ops` sits outside the medallion flow. It holds profiling output, the validation
+baselines used to reconcile gold, and the bronze and silver run logs.
 
 **Bronze** preserves source data exactly as it arrives, append-only, with row-level lineage. Implemented twice, as a Spark notebook and as a Fabric Copy job, and compared.
 See [docs/bronze.md](docs/Bronze.md).
 
 **Silver** cleans, conforms and deduplicates into one validated row per business entity,
-with MERGE-based SCD Type 1 loads and change data feed enabled for gold. Transactional
+with MERGE-based SCD Type 1 loads. Gold reads silver through its SQL analytics endpoint,
+incrementally on a watermark column. Transactional
 tables are built with a Spark notebook, reference tables with Dataflow Gen2.
 See [docs/silver.md](docs/Silver.md).
 
-**Gold** is a Kimball star schema built with T-SQL stored procedures and served through a DirectLake semantic model. Planned.
+**Gold** is a Kimball star schema in a Fabric Data Warehouse, built with T-SQL stored procedures and served through a Direct Lake semantic model. The analytical requirements it answers, and the questions the data cannot support, are in [docs/business-requirements.md](docs/Business%20Requirements.md). The bus matrix, grain statements and measures are in [docs/gold.md](docs/Gold.md).
 
 ---
 
@@ -77,9 +81,9 @@ To reproduce it, see [Setting up the source](#setting-up-the-source).
 | Source | Neon PostgreSQL 18 |
 | Ingestion | Fabric Spark notebooks (PySpark, JDBC), Fabric Copy job |
 | Storage | OneLake, Delta Lake |
-| Transformation | PySpark, spaCy, Dataflow Gen2 |
+| Transformation | PySpark, Dataflow Gen2, T-SQL stored procedures |
 | Warehouse | Fabric Data Warehouse, T-SQL |
-| Semantic layer | DirectLake, DAX |
+| Semantic layer | Direct Lake, DAX |
 | Configuration | Fabric Variable Library, Azure Key Vault |
 | Source control | Fabric Git integration, GitHub |
 
@@ -125,7 +129,7 @@ The source database is not part of this repository. To reproduce it:
 
 The load script copies tables in foreign key dependency order and prints row counts on completion.
 
-The two pre-aggregated tables in the Kaggle export are not loaded. They are OLAP artifacts rather than OLTP entities, and equivalents are rebuilt in the gold layer from the transactional tables.
+The two pre-aggregated tables in the Kaggle export are not loaded into the source database. They are OLAP artifacts rather than OLTP entities. They are loaded separately into the operations lakehouse as a validation baseline, and gold's aggregation of the transactional facts is reconciled against them.
 
 ---
 
