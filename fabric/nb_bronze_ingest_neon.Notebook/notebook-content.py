@@ -48,7 +48,7 @@
 # 
 #  Inclusive watermark. Incremental reads use >= rather than >, so rows sharing
 #  the highest watermark value are never skipped. On a DATE column this is not
-#  an edge case: 85,410 loads span roughly 1,095 dates, so about 78 rows share
+#  an edge case: 85,410 loads span 1,096 dates, so about 78 rows share
 #  any given boundary. The re-read rows are retained here and resolved in
 #  silver, because bronze does not deduplicate.
 # 
@@ -57,9 +57,9 @@
 #  Partitioning primarily isolates concurrent writers, and there is one writer.
 #  Delta statistics and file skipping handle pruning at this scale.
 # 
-#  V-Order left disabled. Bronze is read by Spark, which gains nothing from
-#  V-Order while paying 15 to 33 percent slower writes. It is enabled in gold,
-#  where Direct Lake benefits from it.
+# V-Order left disabled. Bronze is written every batch and each row is read
+# about once, by silver, so the roughly 10 percent Spark read gain does not
+# repay 15 to 33 percent slower writes. Gold is a warehouse, where V-Order is on by default and Direct Lake benefits from it.
 # 
 # **Document read partitioning benchmark results**:
 # Measured fuel_purchases (196,442 rows) at 0, 4 and 8 JDBC read

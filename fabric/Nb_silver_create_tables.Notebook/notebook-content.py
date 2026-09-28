@@ -122,7 +122,7 @@ TBLPROPERTIES (
 #
 # _source_ingest_date  which bronze batch this row came from
 # _silver_created_at   first time the row entered silver; never updated
-# _silver_updated_at   last time MERGE touched it
+# _silver_updated_at   last time a business column changed (conditional MERGE)
 # _silver_run_id       which transformation run last wrote it
 # _dq_status           'valid' or 'flagged'; gold filters on this without
 #                      needing to know which rules apply to which table
@@ -280,7 +280,7 @@ REFERENCE_TABLES = {
 #
 # Foreign key columns stay nullable. Seven of them carry nulls at around two
 # percent, an intentional characteristic of the source. Gold resolves those to
-# Unknown dimension members; silver must not invent values.
+# the Missing member (key 0); Unknown (-1) is for failed lookups. Silver must not invent values.
 #
 # Data quality flags record rule failures rather than removing rows. All three
 # failing rules trace to the same cause: columns generated independently of
@@ -548,9 +548,9 @@ print("All tables ready." if not problems
 #      now, so a mismatch fails the write rather than silently widening a
 #      column.
 #
-#   2. Set the destination to append or update an EXISTING table. A replace
-#      drops and recreates it, which discards the table properties and
-#      silently disables change data feed.
+#   2. Set the destination to Replace with a FIXED schema on the EXISTING
+#      table. A fixed schema keeps the table object and its properties; a
+#      dynamic schema drops and recreates it, discarding them.
 #
 #   3. Derived columns use a fixed as-of date of 2024-12-31, the last fact
 #      date, rather than the current date:
@@ -566,8 +566,7 @@ print("All tables ready." if not problems
 #   4. Audit columns: set _dq_status to 'valid', _source_ingest_date from the
 #      bronze row, and both timestamps to the run time.
 #
-# After the first Dataflow run, re-run CELL 6. If change data feed has gone
-# missing, the destination was set to replace.
+# After the first Dataflow run, re-run CELL 6 to confirm the table properties survived.
  
 print("See cell source for Dataflow Gen2 requirements.")
 

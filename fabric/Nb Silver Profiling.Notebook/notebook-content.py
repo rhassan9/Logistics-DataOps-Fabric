@@ -826,8 +826,8 @@ for table, column in CONTINUITY_CHECKS:
 # inner join in gold.
 #
 # Nulls are counted separately from orphans. Nulls are a known, intentional
-# condition (~2% of trips are unassigned) and resolve to the Unknown dimension
-# member in gold. An orphan is a genuine integrity failure.
+# condition (~2% of trips are unassigned) and resolve to the Missing dimension
+# member (key 0) in gold. An orphan is a genuine integrity failure.
  
 RELATIONSHIPS = [
     ("loads",               "customer_id",  "customers",   "customer_id"),
@@ -1246,8 +1246,8 @@ display(spark.sql("""
 # ===========================================================================
 # CELL 9 - FREE TEXT
 # ===========================================================================
-# The two columns the spaCy categorisation will consume. Length distribution
-# and sample values determine whether rule-based matching is viable.
+# The two columns planned for spaCy categorisation. This cell showed both are templates (21 and 12 distinct values), so NLP was dropped for string splits. 
+# Length distribution and sample values determine whether rule-based matching is viable.
  
 for table, column in [("maintenance_records", "service_description"),
                       ("safety_incidents",    "description"),
