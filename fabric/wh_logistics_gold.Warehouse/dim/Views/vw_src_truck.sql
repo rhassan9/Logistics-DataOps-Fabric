@@ -1,0 +1,14 @@
+CREATE   VIEW dim.vw_src_truck
+AS
+SELECT s.truck_id,
+       COALESCE(s.unit_number,   'Not Recorded') AS unit_number,
+       COALESCE(s.make,          'Not Recorded') AS truck_make,
+       COALESCE(s.status,        'Not Recorded') AS truck_status,
+       COALESCE(s.home_terminal, 'Not Recorded') AS truck_home_terminal,
+       s.model_year            AS truck_model_year,
+       s.acquisition_date      AS truck_acquisition_date,
+       s.acquisition_mileage,
+       s.tank_capacity_gallons
+FROM lh_logistics_silver.dbo.silver_trucks AS s;
+
+GO
