@@ -57,7 +57,8 @@
  
 load_mode     = "full"   # "full" | "incremental"
 ingest_from   = ""       # ISO date; incremental reads bronze rows on or after this
-tables_filter = ""       # comma-separated subset for targeted reruns
+tables_filter = "delivery_events"       # comma-separated subset for targeted reruns
+run_maintenance = False   # True only on a scheduled maintenance run
 
 # METADATA ********************
 
@@ -300,8 +301,10 @@ def transform_delivery_events(df):
     arrival_status splits the source flag's single false value: Early means
     schedules are over-padded, Late means they are missed.
     """
+    # Full timestamp precision. unix_timestamp truncates to whole seconds, which
+    # misclassified events within a second of the 120-minute window boundary.
     variance = (
-        F.unix_timestamp("actual_datetime") - F.unix_timestamp("scheduled_datetime")
+        F.col("actual_datetime").cast("double") - F.col("scheduled_datetime").cast("double")
     ) / 60
  
     # Flagged at load level so both events of an affected load are marked.
@@ -326,8 +329,8 @@ def transform_delivery_events(df):
                     F.round(variance, 1).cast("decimal(10,1)"))
         .withColumn(
             "arrival_status",
-            F.when(F.col("arrival_variance_minutes") <= -ON_TIME_WINDOW_MINUTES, "Early")
-             .when(F.col("arrival_variance_minutes") >=  ON_TIME_WINDOW_MINUTES, "Late")
+            F.when(variance <= -ON_TIME_WINDOW_MINUTES, "Early")
+             .when(variance >=  ON_TIME_WINDOW_MINUTES, "Late")
              .otherwise("On Time")
         )
         .withColumn(
@@ -593,44 +596,22 @@ print(f"run {RUN_ID} logged")
 # OPTIMIZE compacts the small files that parallel writes produce.
 # VACUUM removes files no longer referenced by the transaction log. Seven days
 # is the floor: shorter windows break time travel and can remove change data
-# feed history before gold has consumed it.
+# feed history before a future Spark consumer has read it.
 
 LARGE_TABLES = ["loads", "trips", "delivery_events", "fuel_purchases"]
 
-for t in LARGE_TABLES:
-    target = f"lh_logistics_silver.dbo.silver_{t}"
-    print(f"OPTIMIZE {target}")
-    spark.sql(f"OPTIMIZE {target}")
+if run_maintenance:
+    for t in LARGE_TABLES:
+        target = f"lh_logistics_silver.dbo.silver_{t}"
+        print(f"OPTIMIZE {target}")
+        spark.sql(f"OPTIMIZE {target}")
 
-for t in LARGE_TABLES:
-    target = f"lh_logistics_silver.dbo.silver_{t}"
-    print(f"VACUUM {target}")
-    spark.sql(f"VACUUM {target} RETAIN 168 HOURS")
-
-# METADATA ********************
-
-# META {
-# META   "language": "python",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# CELL ********************
-
-for t in ["customers", "drivers", "trucks", "trailers", "routes", "facilities"]:
-    spark.sql(f"""
-        ALTER TABLE lh_logistics_silver.dbo.silver_{t}
-        SET TBLPROPERTIES (delta.enableChangeDataFeed = false)
-    """)
-
-# METADATA ********************
-
-# META {
-# META   "language": "python",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# CELL ********************
-
+    for t in LARGE_TABLES:
+        target = f"lh_logistics_silver.dbo.silver_{t}"
+        print(f"VACUUM {target}")
+        spark.sql(f"VACUUM {target} RETAIN 168 HOURS")
+else:
+    print("Table maintenance skipped (run_maintenance = False)")
 
 # METADATA ********************
 
