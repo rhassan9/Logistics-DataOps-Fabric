@@ -36,7 +36,7 @@ Date appears on all six facts, truck on five, route on four, driver on four, tra
 | `dim_load_type` | load lifecycle | booking_type, load_type |
 | `dim_delivery_status` | delivery event | event_type, arrival_status |
 | `dim_maintenance_class` | maintenance | service_urgency, maintenance_type |
-| `dim_incident_class` | safety incident | incident_type, incident_category, severity, cause, preventable, at fault |
+| `dim_incident_class` | safety incident | incident_type, incident_category, severity, cause, preventable status, at fault status, injury status |
 
 Each is built from the combinations that actually occur in silver plus the special members, not the full Cartesian product, because some attributes are dependent and a product would offer impossible combinations in slicers.
 
@@ -56,6 +56,66 @@ The three have distinct causes and must not be conflated. A load awaiting dispat
 `driver_id` that resolves to no dimension row is Unknown, and indicates a real integrity problem rather than an expected gap.
 
 Microsoft's convention also includes -3 for Error. No ETL path in this model produces it, so it is not created.
+
+---
+
+## Dimensions
+
+### Schemas and naming
+
+Dimensions live in schema `dim` and facts in schema `fact`, keeping the prefixed table names used throughout this design (`dim.dim_driver`, `fact.fact_trip`). Microsoft's Fabric dimensional modelling guidance prefixes dimension and fact tables, and the names stay identical to the bus matrix; the semantic model gives tables business-facing names. Schema `ref` holds `ref.us_state`, the single source of full state names, which never enters the semantic model. Schema `log` holds the ETL run log.
+
+Columns shared in meaning across dimensions carry their owning table's prefix (`driver_home_terminal`, `truck_home_terminal`, `truck_model_year`), so no field name repeats across the model.
+
+### Keys and constraints
+
+Every dimension uses a `BIGINT IDENTITY` surrogate key except `dim_date`, whose key is an `INT` in `YYYYMMDD` form. Microsoft names the date key as the one accepted exception to meaningless surrogate keys, and Kimball accepts readable date keys on the understanding that special rows force non-date values (0, -1, -2) that consumers must test for.
+
+No table carries primary, unique or foreign key constraints. Fabric supports them only as `NOT ENFORCED`, added by `ALTER TABLE`, with documented Git integration limitations, and Microsoft notes that unenforced key columns are not necessarily good join candidates. Each load procedure asserts uniqueness itself and fails on a violation.
+
+### Date dimension
+
+`dim_date` is generated rather than sourced, covering whole calendar years from 2022-01-01 to 2025-12-31; the procedure rejects any other range shape. Labels and sort columns (`quarter_label`, `month_name`, `year_month_label` with their numeric sort keys) are materialised, because Direct Lake does not support calculated columns on SQL and supports them only in preview on OneLake.
+
+`is_complete_month` is 1 when the whole month falls inside the loaded data window, supplied as a parameter (2024-12-31). Delivery events extend to 2025-01-03, so January 2025 is incomplete; filtering on the flag removes the false collapse from monthly trends and drops 2025 from year-level charts. Keys are deterministic, so regenerating the table never changes a key a fact depends on.
+
+A fact's own date key must exist in `dim_date`. Facts dated beyond 2025-12-31 require the date range to be extended first; otherwise they resolve to the Unknown member.
+
+### Slowly changing dimensions
+
+All six reference dimensions carry `valid_from_date_key`, `valid_to_date_key`, `is_current` and `version_reason`, following Microsoft's SCD type 2 column pattern. Validity is half-open, `[valid_from, valid_to)`, so a fact resolves to the version where its date key is at least `valid_from_date_key` and below `valid_to_date_key`. A member's first version starts at the earliest date in `dim_date`.
+
+`valid_to_date_key = 99991231` marks the open-ended current version. It is a comparison boundary, not a member of the reporting date dimension, and the validity columns are not related to `dim_date` in the semantic model.
+
+Customer, trailer, route and facility use Type 1: changed attributes are overwritten and the validity columns stay at their initial values, because the source contains no master data change in its three years. Driver and truck use Type 2 for the attributes whose history changes how activity is attributed, and Type 1 for corrections:
+
+| Dimension | Type 2: new version | Type 1: overwrite every version |
+|---|---|---|
+| `dim_driver` | `driver_home_terminal`, `employment_status`, `driver_termination_date` | `driver_name`, `driver_hire_date`, `years_experience` |
+| `dim_truck` | `truck_status`, `truck_home_terminal` | `unit_number`, `truck_make`, `truck_model_year`, `truck_acquisition_date`, `acquisition_mileage`, `tank_capacity_gallons` |
+
+`years_experience` is Type 1 despite growing over time: versioning it would add a row per driver per year. A Type 2 version starts at the ETL processing date passed to the procedure, which is a comparison boundary and may fall after the reporting window. A second change on the same date overwrites the current version rather than creating a zero-length one, and a processing date earlier than the current version's start is rejected. Both SCD2 dimensions carry a version label combining the member with its versioned attributes.
+
+Dimension rows are never deleted, since facts reference their keys.
+
+### Source mapping
+
+Each dimension reads silver through one view (`dim.vw_src_customer` and so on) that holds the column mapping: renames, the state name lookup against `ref.us_state`, null text replaced by `Not Recorded` (distinct from the Unknown member), flags rendered as text, and display casing. The view stores no data; silver remains the staging layer. Change detection compares the view with the dimension using a null-safe `EXCEPT` comparison, so an unchanged member is never rewritten.
+
+### Junk dimensions and location
+
+Junk dimensions follow Kimball Design Tip #113: built from combinations that occur in silver, checked for new combinations on every load before the facts, and never versioned, since a changed value is simply another combination. The loads are insert-only.
+
+| Dimension | Combinations |
+|---|---:|
+| `dim_load_type` | 6 of 6 possible |
+| `dim_delivery_status` | 6 of 6 |
+| `dim_maintenance_class` | 21 of 21 |
+| `dim_incident_class` | 134 of 480 |
+
+`incident_type` determines `incident_category` exactly, leaving 480 possible incident combinations. 170 incidents fill 134 of them, close to the 143 expected if the remaining attributes were generated independently, so the incident junk dimension provides little compression. At 137 rows it remains a single dimension.
+
+`dim_location` holds one row per event city used by fuel purchases, safety incidents and maintenance. A city receives a state only when the trusted geography in facilities, routes and delivery events agrees on exactly one; `state_source` records which table supplied it. All 25 event cities resolve. A city that does not resolve receives no row, and its facts resolve to the Unknown member.
 
 ---
 
@@ -129,10 +189,13 @@ Before dispatch the keys hold the Not Applicable member, which makes "revenue bo
 | Degenerate | `event_id`, `load_id`, `trip_id` |
 | Additive measures | `detention_minutes`, `billable_detention_minutes` |
 | Non-additive | `arrival_variance_minutes` |
+| Detail | `scheduled_datetime`, `actual_datetime` |
 
 `route_key` is resolved through trip then load during ETL. DP-1 asks which city pairs deliver most reliably, and the origin and destination pair lives on `dim_route`, so the fact connects to the dimension directly rather than reaching it through two other facts.
 
 Arrival variance and detention measure different things and are independent in this source (correlation 0.0255). Variance is carrier punctuality against the appointment; detention is facility performance after arrival, billable beyond the two-hour free period. Both are kept.
+
+The two timestamps stay on the fact for detail. No time-of-day dimension is built: no requirement needs one, and the source assigns event times without pattern.
 
 `arrival_variance_minutes` is signed, so negative means early. It must not be summed, since early and late arrivals would cancel. The semantic model exposes average variance and the Early, On Time and Late counts from `dim_delivery_status`.
 
@@ -167,6 +230,9 @@ The fact carries no load reference. Route is the analytical axis FE-1 needs, and
 | Dimension keys | `maintenance_date_key`, `truck_key`, `location_key`, `maintenance_class_key` |
 | Degenerate | `maintenance_id` |
 | Additive measures | `labor_hours`, `labor_cost`, `parts_cost`, `downtime_hours` |
+| Non-additive | `odometer_reading` |
+
+`odometer_reading` is the truck's reading at service time. Summing it has no meaning, but the difference between consecutive readings for a truck gives the mileage between services.
 
 `location_key` comes from `facility_location`, which is free text in the source rather than a facility identifier, so it resolves to `dim_location` at city grain rather than to `dim_facility`.
 

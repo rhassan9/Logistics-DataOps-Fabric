@@ -99,7 +99,7 @@ Gold excludes flagged rows from the affected measures only. `_dq_status` lets it
 Arrival variance and detention are independent in this source, correlation 0.0255, so both are kept.
 
 `arrival_status` splits the source flag's single false value into Early and Late. Both are appointment failures but different operational problems: consistently early means schedules are over-padded, late means they are not being met. The threshold matches the source flag's
-exclusive 120-minute window in both directions.
+exclusive 120-minute window in both directions, applied to the variance at full timestamp precision. `arrival_variance_minutes` stores the same variance rounded to a tenth of a minute; classification never uses the rounded value.
 
 **`maintenance_records`** and **`safety_incidents`** have their templated description columns flattened. `service_description` held 21 values (three urgency levels across seven components) and `description` held 12 (three severities across four causes). Neither is free
 text, so the planned NLP step was dropped in favour of a string split.
@@ -155,12 +155,16 @@ Silver preserves its source's row count. Deduplication is the only operation per
 
 Derived columns reconcile independently against the source:
 
-- `arrival_status` matches `on_time_flag` exactly: 95,095 On Time, 75,725 Early plus Late
+- `arrival_status` matches `on_time_flag` exactly: 95,095 On Time against `true`; 9,382 Early and 66,343 Late against `false`
 - `billable_detention_minutes` sums to 2,987,151, the figure measured during profiling
 
-Reconciliation found one bug. `arrival_status` used an inclusive boundary while the source flag uses an exclusive one, misclassifying the 20 rows sitting at exactly ±120 minutes. That is the same class of error as the inclusive watermark fix in bronze, and both were found by
-comparing against a known number rather than by reading the code. The boundary was corrected to match the source, and all 20 rows now reconcile. Since `arrival_status` now carries the same information as `on_time_flag`, gold keeps only `arrival_status`; the source
-flag remains in silver.
+Reconciliation found two defects in `arrival_status`, both at the 120-minute boundary.
+
+The first was an inclusive boundary where the source flag is exclusive, misclassifying 20 rows sitting at exactly ±120 minutes.
+
+The second surfaced when gold listed the delivery status values: 59 events carried `on_time_flag = true` but were classified Early or Late. Two causes combined. Classification used the rounded `arrival_variance_minutes`, so 119.97 minutes rounded to 120.0 and became Late; and `unix_timestamp` truncated both timestamps to whole seconds, so an arrival 7,199.6 seconds late read as 7,200. A millisecond check settled the source rule: every `true` row in the boundary band sits below 7,200,000 ms and every `false` row at or above it. The variance is now computed at full timestamp precision and classified directly, and all 170,820 events reconcile.
+
+Both defects, like the inclusive watermark fix in bronze, were found by comparing against a known number rather than by reading the code. Since `arrival_status` carries the same information as `on_time_flag`, gold keeps only `arrival_status`; the source flag remains in silver.
 
 ---
 
@@ -177,7 +181,7 @@ than a failed run.
 
 ## Maintenance
 
-`OPTIMIZE` and `VACUUM` are Spark SQL commands and are not supported in the SQL analytics endpoint or the warehouse editor. Run them from a notebook.
+`OPTIMIZE` and `VACUUM` are Spark SQL commands and are not supported in the SQL analytics endpoint or the warehouse editor. The transactional notebook runs them only when its `run_maintenance` parameter is true, so routine batch runs skip them and a scheduled maintenance run enables them. The equivalent standalone commands:
 
 ```python
 LARGE_TABLES = ["loads", "trips", "delivery_events", "fuel_purchases"]
