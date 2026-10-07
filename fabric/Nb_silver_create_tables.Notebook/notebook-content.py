@@ -81,7 +81,7 @@
 # CELL 1 — PARAMETERS  
 # ===========================================================================
  
-drop_existing = False   # True rebuilds every table. Destroys all silver data.
+drop_existing = True   # True rebuilds every table. Destroys all silver data.
 
 
 # METADATA ********************
@@ -104,8 +104,11 @@ SILVER_SCHEMA = "dbo"
 # Transactional tables keep CDF enabled because they may be consumed
 # incrementally by downstream Spark/Delta processes.
 #
-# Reference tables are Replace-loaded by Dataflow Gen2, so CDF is
-# intentionally disabled to avoid meaningless delete/insert change noise.
+# Reference tables are Replace-loaded by Dataflow Gen2, which writes Delta at
+# reader 1 / writer 2. Runtime 2.0 creates tables at reader 3 / writer 7 with
+# deletion vectors, and the Dataflow writer rejects them. The protocol is pinned
+# to the Dataflow's level, with deletion vectors off, so both writers can use
+# the tables. CDF is off: gold full-reloads these dimensions.
 
 TRANSACTIONAL_PROPERTIES = """
 TBLPROPERTIES (
@@ -115,23 +118,32 @@ TBLPROPERTIES (
 
 REFERENCE_PROPERTIES = """
 TBLPROPERTIES (
+    delta.minReaderVersion = '1',
+    delta.minWriterVersion = '2',
+    delta.enableDeletionVectors = 'false',
     delta.deletedFileRetentionDuration = 'interval 7 days'
 )"""
  
 # Audit columns carried by every silver table.
 #
-# _source_ingest_date  which bronze batch this row came from
-# _silver_created_at   first time the row entered silver; never updated
-# _silver_updated_at   last time a business column changed (conditional MERGE)
-# _silver_run_id       which transformation run last wrote it
-# _dq_status           'valid' or 'flagged'; gold filters on this without
-#                      needing to know which rules apply to which table
+# _source_ingest_date   which bronze batch this row came from
+# _silver_created_at    first time the row entered silver; never updated
+# _silver_updated_at    last time silver's copy changed (conditional MERGE)
+# _silver_run_id        which transformation run last wrote it
+# _dq_status            'valid' or 'flagged'; gold filters on this without
+#                       knowing which rules apply to which table
+# _is_deleted_in_source true when the key no longer exists at the source; the
+#                       row is kept with its last known values
+# _source_changed_at    when the current state took effect at the source, as
+#                       precisely as ingestion can observe it
 AUDIT_COLUMNS = """
     _source_ingest_date       STRING,
     _silver_created_at        TIMESTAMP,
     _silver_updated_at        TIMESTAMP,
     _silver_run_id            STRING,
-    _dq_status                STRING
+    _dq_status                STRING,
+    _is_deleted_in_source     BOOLEAN,
+    _source_changed_at        TIMESTAMP
 """
  
 print(f"target: {SILVER_LAKEHOUSE}")

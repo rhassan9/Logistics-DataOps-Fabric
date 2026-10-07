@@ -42,38 +42,43 @@
       "queryName": "as_of_date",
       "loadEnabled": false
     },
-    "silver_drivers_DataDestination": {
-      "queryId": "923321c8-53b0-4ff6-bd9c-ea2cf034056a",
-      "queryName": "silver_drivers_DataDestination",
-      "isHidden": true,
+    "fnCurrentState": {
+      "queryId": "c2bb45dd-3dd0-44ce-a327-7158e3c93054",
+      "queryName": "fnCurrentState",
       "loadEnabled": false
     },
     "silver_customers_DataDestination": {
-      "queryId": "0b9adf5f-8135-41d6-9f9c-279e6fcbb156",
+      "queryId": "55999e48-60fc-4289-b29f-96aa1c772f25",
       "queryName": "silver_customers_DataDestination",
       "isHidden": true,
       "loadEnabled": false
     },
+    "silver_drivers_DataDestination": {
+      "queryId": "09eece33-4c77-4ca1-bd18-61a1ff82cafe",
+      "queryName": "silver_drivers_DataDestination",
+      "isHidden": true,
+      "loadEnabled": false
+    },
     "silver_facilities_DataDestination": {
-      "queryId": "762bc8ac-860f-43c8-aa68-e897716b6b34",
+      "queryId": "07e58278-424f-474e-b814-77910b5b10bc",
       "queryName": "silver_facilities_DataDestination",
       "isHidden": true,
       "loadEnabled": false
     },
     "silver_routes_DataDestination": {
-      "queryId": "9615342e-2cd3-48e4-b77b-8d3e273deba3",
+      "queryId": "e05072af-8e93-4526-b92c-c5f5c5d4daab",
       "queryName": "silver_routes_DataDestination",
       "isHidden": true,
       "loadEnabled": false
     },
     "silver_trailers_DataDestination": {
-      "queryId": "cdfb78d6-1c94-4fda-b185-59e7ef193eb2",
+      "queryId": "b4e6fe0e-77b9-4a7c-b161-87aa1e368030",
       "queryName": "silver_trailers_DataDestination",
       "isHidden": true,
       "loadEnabled": false
     },
     "silver_trucks_DataDestination": {
-      "queryId": "47f085c5-95b7-4ccf-93b3-746ca4dd91d2",
+      "queryId": "2a287fb6-7a5c-4570-850f-ac14cec082d1",
       "queryName": "silver_trucks_DataDestination",
       "isHidden": true,
       "loadEnabled": false

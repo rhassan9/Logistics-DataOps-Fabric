@@ -28,7 +28,7 @@
 # Destination : lh_logistics_silver
 # Scope       : six transactional tables. Reference tables are built with
 #               Dataflow Gen2 against the same schemas.
-# Requires    : nb_silver_create_tables has run in this environment.
+# Requires    : Nb_silver_create_tables has run in this environment.
 #
 # Silver holds one validated, non-aggregated row per business entity.
 # Deduplication, derived business columns, and data quality flags. Aggregation
@@ -38,9 +38,12 @@
 # holds current state (SCD Type 1). Gold applies Type 2 where a dimension
 # needs history.
 #
+# Rows are never physically deleted. A key that no longer exists at the
+# source keeps its last values with _is_deleted_in_source = true, and
+# _source_changed_at dates when the current state took effect at the source.
+#
 # Tables are not created here. Change data feed captures nothing
 # retrospectively, so tables must already exist with the property set.
-
 
 # METADATA ********************
 
@@ -57,8 +60,8 @@
  
 load_mode     = "full"   # "full" | "incremental"
 ingest_from   = ""       # ISO date; incremental reads bronze rows on or after this
-tables_filter = "delivery_events"       # comma-separated subset for targeted reruns
-run_maintenance = False   # True only on a scheduled maintenance run
+tables_filter = ""       # comma-separated subset for targeted reruns
+run_maintenance = True   # True only on a scheduled maintenance run
 
 # METADATA ********************
 
@@ -96,6 +99,9 @@ ON_TIME_WINDOW_MINUTES = 120
 # Set by the MERGE rather than by the transformation, so an insert stamps both
 # and an update touches only _silver_updated_at.
 MERGE_MANAGED = {"_silver_created_at", "_silver_updated_at"}
+
+LINEAGE = ["_ingest_date", "_ingested_at", "_source_system", "_load_mode"]
+
  
  
 def bronze(table_name):
@@ -150,25 +156,123 @@ print(f"{len(TABLES)} tables in scope")
 # ===========================================================================
 # CELL 4 — SHARED FUNCTIONS
 # ===========================================================================
+def current_state(df, business_key, detect_deletes):
+    """Reduce bronze rows to one current-state row per business key.
+ 
+    The latest version observed is current. _source_changed_at is the first
+    bronze batch of the unbroken run of identical versions that ends at the
+    latest one. A run is broken by a change of values, or by a complete
+    (full-mode) snapshot the key was missing from, so a value that changes
+    and changes back, or a key that disappears and returns unchanged, is
+    dated by its return.
+ 
+    A key whose last appearance precedes the latest complete snapshot no
+    longer exists at the source. Its last version is kept, flagged, and
+    dated by the first snapshot that no longer contained it. Both snapshot
+    rules need every batch, so they apply only when detect_deletes is true.
+    """
+    business = [c for c in df.columns if c not in LINEAGE]
+    oldest_first = Window.partitionBy(business_key).orderBy(F.col("_ingested_at").asc())
+    newest_first = Window.partitionBy(business_key).orderBy(F.col("_ingested_at").desc(),
+                                                             F.col("_ingest_date").desc())
+    running = oldest_first.rowsBetween(Window.unboundedPreceding, Window.currentRow)
+ 
+    history = (
+        df.withColumn("_version", F.sha2(F.to_json(F.struct(*business)), 256))
+          .withColumn("_previous_version", F.lag("_version").over(oldest_first))
+          .withColumn("_previous_seen_at", F.lag("_ingested_at").over(oldest_first))
+    )
+ 
+    if detect_deletes:
+        # Every bronze write stamps one _ingested_at, so each distinct value
+        # among full-mode rows is one complete snapshot.
+        snapshots = (df.filter(F.col("_load_mode") == "full")
+                       .select(F.col("_ingested_at").alias("_snapshot_at")).distinct())
+        # A complete snapshot between two appearances means the key was gone.
+        returned = (
+            history.select(business_key, "_ingested_at", "_previous_seen_at")
+                   .join(F.broadcast(snapshots),
+                         (F.col("_snapshot_at") > F.col("_previous_seen_at")) &
+                         (F.col("_snapshot_at") < F.col("_ingested_at")))
+                   .select(business_key, "_ingested_at").distinct()
+                   .withColumn("_returned", F.lit(True))
+        )
+        history = history.join(returned, [business_key, "_ingested_at"], "left")
+    else:
+        history = history.withColumn("_returned", F.lit(None).cast("boolean"))
+ 
+    starts_version = (
+        F.col("_previous_version").isNull()
+        | (F.col("_previous_version") != F.col("_version"))
+        | F.coalesce(F.col("_returned"), F.lit(False))
+    )
+ 
+    latest = (
+        history
+          .withColumn("_source_changed_at",
+                      F.last(F.when(starts_version, F.col("_ingested_at")),
+                             ignorenulls=True).over(running))
+          .withColumn("_rn", F.row_number().over(newest_first))
+          .filter(F.col("_rn") == 1)
+          .drop("_version", "_previous_version", "_previous_seen_at", "_returned", "_rn")
+    )
+ 
+    if detect_deletes:
+        gone = (
+            latest.select(business_key, "_ingested_at")
+                  .join(F.broadcast(snapshots), F.col("_snapshot_at") > F.col("_ingested_at"))
+                  .groupBy(business_key)
+                  .agg(F.min("_snapshot_at").alias("_deleted_seen_at"))
+        )
+        latest = latest.join(gone, business_key, "left")
+    else:
+        latest = latest.withColumn("_deleted_seen_at", F.lit(None).cast("timestamp"))
+ 
+    return (
+        latest
+        .withColumn("_is_deleted_in_source", F.col("_deleted_seen_at").isNotNull())
+        .withColumn("_source_changed_at", F.coalesce("_deleted_seen_at", "_source_changed_at"))
+        .drop("_deleted_seen_at")
+    )
  
  
 def read_bronze(table_name, business_key):
-    """Read one bronze table, reduced to the earliest row per business key.
+    """Read one bronze table as current state per business key.
  
-    Bronze re-reads rows at the watermark boundary by design, so a key can
-    appear in more than one batch.
+    Incremental runs read only recent batches. They can show what changed but
+    not what disappeared, so deletions are detected on full runs. A key silver
+    already holds as deleted is revived only by a bronze row newer than its
+    deletion, and is then dated by that return.
     """
     df = spark.table(bronze(table_name))
  
-    if load_mode == "incremental" and ingest_from.strip():
+    if load_mode == "full":
+        return current_state(df, business_key, detect_deletes=True)
+ 
+    if ingest_from.strip():
         df = df.filter(F.col("_ingest_date") >= ingest_from.strip())
  
-    earliest = Window.partitionBy(business_key).orderBy(F.col("_ingested_at").asc())
+    out = current_state(df, business_key, detect_deletes=False)
  
+    deleted = (
+        spark.table(silver(table_name))
+             .where(F.col("_is_deleted_in_source"))
+             .select(business_key, F.col("_source_changed_at").alias("_deleted_at"))
+    )
+    back = (
+        df.join(deleted, business_key)
+          .where(F.col("_ingested_at") > F.col("_deleted_at"))
+          .groupBy(business_key)
+          .agg(F.min("_ingested_at").alias("_back_at"))
+    )
     return (
-        df.withColumn("_rn", F.row_number().over(earliest))
-          .filter(F.col("_rn") == 1)
-          .drop("_rn")
+        out.join(deleted, business_key, "left")
+           .join(back, business_key, "left")
+           # Seen only before its deletion: leave the silver row as it is.
+           .where(F.col("_deleted_at").isNull() | F.col("_back_at").isNotNull())
+           # Dated by the return, unless the values changed again after it.
+           .withColumn("_source_changed_at", F.greatest("_back_at", "_source_changed_at"))
+           .drop("_deleted_at", "_back_at")
     )
  
  
@@ -215,7 +319,7 @@ def align_to_target(df, target):
  
     return df.select(*target_cols)
  
-NON_BUSINESS = {"_silver_run_id", "_source_ingest_date"} 
+NON_BUSINESS = {"_silver_run_id", "_source_ingest_date", "_source_changed_at"}
  
 def write_silver(df, table_name, business_key):
     """MERGE into an existing silver table."""
@@ -223,7 +327,7 @@ def write_silver(df, table_name, business_key):
  
     if not spark.catalog.tableExists(target):
         raise ValueError(
-            f"{target} does not exist. Run nb_silver_create_tables first: "
+            f"{target} does not exist. Run Nb_silver_create_tables first: "
             f"change data feed must be enabled before the first write."
         )
  
@@ -234,7 +338,7 @@ def write_silver(df, table_name, business_key):
         for c in aligned.columns
         if c not in NON_BUSINESS and c != business_key
     )
-
+ 
     (
         DeltaTable.forName(spark, target).alias("t")
         .merge(aligned.alias("s"), f"t.{business_key} = s.{business_key}")
@@ -309,7 +413,8 @@ def transform_delivery_events(df):
  
     # Flagged at load level so both events of an affected load are marked.
     reversed_loads = (
-        df.groupBy("load_id")
+        df.filter(~F.col("_is_deleted_in_source"))
+          .groupBy("load_id")
           .agg(
               F.max(F.when(F.col("event_type") == "Pickup",
                            F.col("actual_datetime"))).alias("_picked"),
@@ -487,8 +592,12 @@ print(f"\n{ok}/{len(results)} tables written")
 # ===========================================================================
 # CELL 7 — VALIDATE
 # ===========================================================================
-# Silver preserves its source's row count. Deduplication is the only operation
-# permitted to reduce it, so a shortfall means rows were lost.
+# Silver keeps one row per business key ever seen. Deduplication is the only
+# operation permitted to reduce the row count, so a shortfall means rows were
+# lost. Source deletions stay in silver as flagged rows; live rows must match
+# the source count.
+#
+# Baselines are the source counts at the time of profiling.
  
 SOURCE_COUNTS = {
     "loads":                85410,
@@ -499,16 +608,29 @@ SOURCE_COUNTS = {
     "safety_incidents":       170,
 }
  
-print(f"{'table':<22}{'silver':>10}{'bronze':>10}  status")
-print("-" * 54)
+print(f"{'table':<22}{'rows':>10}{'keys':>10}{'live':>10}{'deleted':>9}"
+      f"{'nulls':>7}{'source':>10}  status")
+print("-" * 86)
  
-for table_name in TABLES:
+contract_failed = []
+for table_name, cfg in TABLES.items():
+    key = cfg["business_key"]
+    r = spark.sql(f"""
+        SELECT count(*)                                                   AS rows,
+               count(DISTINCT {key})                                      AS keys,
+               sum(CASE WHEN NOT _is_deleted_in_source THEN 1 ELSE 0 END) AS live,
+               sum(CASE WHEN _is_deleted_in_source THEN 1 ELSE 0 END)     AS deleted,
+               sum(CASE WHEN _is_deleted_in_source IS NULL
+                          OR _source_changed_at IS NULL THEN 1 ELSE 0 END) AS nulls
+        FROM {silver(table_name)}
+    """).first()
     expected = SOURCE_COUNTS.get(table_name, -1)
-    actual = spark.sql(
-        f"SELECT count(*) c FROM {silver(table_name)}"
-    ).collect()[0]["c"]
-    print(f"{table_name:<22}{actual:>10,}{expected:>10,}  "
-          f"{'OK' if actual == expected else 'CHECK'}")
+    contract_ok = r["rows"] == r["keys"] and r["nulls"] == 0
+    status = "OK" if contract_ok and r["live"] == expected else "CHECK"
+    if not contract_ok:
+        contract_failed.append(table_name)
+    print(f"{table_name:<22}{r['rows']:>10,}{r['keys']:>10,}{r['live']:>10,}"
+          f"{r['deleted']:>9,}{r['nulls']:>7,}{expected:>10,}  {status}")
  
 # Expected from profiling: 7,450 implausible idle, 18,105 over capacity,
 # 972 reversed events (486 loads, both events flagged).
@@ -528,8 +650,9 @@ display(spark.sql(f"""
     FROM {silver('delivery_events')}
 """))
  
-# Must reconcile with the source flag: On Time near 95,095, Early plus Late
-# near 75,725. A wider gap means the derived threshold is wrong.
+# Must reconcile exactly with the source flag: 95,095 On Time against true;
+# 9,382 Early and 66,343 Late against false. Any other combination means the
+# derived threshold is wrong.
 print("Arrival status against the source flag:")
 display(spark.sql(f"""
     SELECT
@@ -569,6 +692,16 @@ display(spark.sql(f"""
 )
  
 print(f"run {RUN_ID} logged")
+ 
+# Fail the run after it is logged, so an orchestrator never mistakes a partial
+# silver load for a complete one.
+failed = [r for r in results if r["status"] != "ok"]
+if failed or contract_failed:
+    raise RuntimeError(
+        f"silver run {RUN_ID} incomplete. "
+        f"failed tables: {[r['table'] for r in failed] or 'none'}; "
+        f"contract violations: {contract_failed or 'none'}"
+    )
 
 # METADATA ********************
 
@@ -579,39 +712,40 @@ print(f"run {RUN_ID} logged")
 
 # CELL ********************
 
-# MAGIC %%sql
-# MAGIC SHOW TBLPROPERTIES lh_logistics_silver.dbo.silver_drivers
-
-# METADATA ********************
-
-# META {
-# META   "language": "sparksql",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# CELL ********************
-
 # Table maintenance. Run after a large load, not on every refresh.
 #
 # OPTIMIZE compacts the small files that parallel writes produce.
-# VACUUM removes files no longer referenced by the transaction log. Seven days
-# is the floor: shorter windows break time travel and can remove change data
-# feed history before a future Spark consumer has read it.
-
+# VACUUM removes files no longer referenced by the transaction log, including
+# change data. nb_gold_change_detection reads these tables' change feeds, so
+# run VACUUM only after gold has consumed every version older than the
+# retention window. If it has not, gold falls back to a full reconciliation:
+# correct, but a full pass. Seven days is the floor: shorter windows break
+# time travel.
+ 
 LARGE_TABLES = ["loads", "trips", "delivery_events", "fuel_purchases"]
-
+ 
 if run_maintenance:
     for t in LARGE_TABLES:
         target = f"lh_logistics_silver.dbo.silver_{t}"
         print(f"OPTIMIZE {target}")
         spark.sql(f"OPTIMIZE {target}")
-
+ 
     for t in LARGE_TABLES:
         target = f"lh_logistics_silver.dbo.silver_{t}"
         print(f"VACUUM {target}")
         spark.sql(f"VACUUM {target} RETAIN 168 HOURS")
 else:
     print("Table maintenance skipped (run_maintenance = False)")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
 
 # METADATA ********************
 
