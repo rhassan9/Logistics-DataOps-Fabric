@@ -59,9 +59,9 @@
 # ---------------------------------------------------------------------------
 # CELL 1: PARAMETERS
 # ---------------------------------------------------------------------------
-run_id = "manual-20261009-08"
-steps  = "fact_trip"  # comma-separated as more fact detectors are added
-full_scan_steps = "fact_trip"  # comma-separated steps to force a full reconciliation
+run_id = "manual-20261010-05b"
+steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident"  # comma-separated as more fact detectors are added
+full_scan_steps = ""  # comma-separated steps to force a full reconciliation
  
 # Full reconciliation is a safe fallback when CDF history is unavailable.
 # Set False in a development session when you want CDF failures to stop the run
@@ -110,6 +110,86 @@ if not run_id:
  
 print(f"run_id={run_id}")
 print(f"steps={steps}")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# ---------------------------------------------------------------------------
+# CELL 2B: SILVER SQL ENDPOINT SYNC
+# ---------------------------------------------------------------------------
+# Change detection reads silver through Spark, straight from Delta. The gold
+# procedures read the same tables through the lakehouse SQL analytics
+# endpoint, whose metadata syncs in the background and can lag. This cell
+# forces the sync, then proves Spark and the endpoint see the same silver
+# before any checkpoint can advance.
+import sempy
+try:
+    from sempy.fabric.sql_endpoint import refresh_sql_endpoint_metadata
+except ImportError as exc:
+    raise RuntimeError(
+        f"semantic-link-sempy {sempy.__version__} has no sql_endpoint module; 0.13.0 or later is required."
+    ) from exc
+
+SILVER_LAKEHOUSE = "lh_logistics_silver"
+SILVER_TABLES = [
+    "silver_customers", "silver_drivers", "silver_trucks", "silver_trailers",
+    "silver_routes", "silver_facilities", "silver_loads", "silver_trips",
+    "silver_delivery_events", "silver_fuel_purchases",
+    "silver_maintenance_records", "silver_safety_incidents",
+]
+
+sync = refresh_sql_endpoint_metadata(
+    warehouse=SILVER_LAKEHOUSE, warehouse_type="Lakehouse"
+)
+display(sync)
+if (sync["Status"] == "Failure").any():
+    raise RuntimeError("Silver SQL endpoint sync reported a failed table; gold not loaded.")
+
+# Same fingerprint on both sides: rows, deleted rows, latest change in epoch
+# microseconds (timezone-neutral on both engines).
+spark_fp = {
+    t: tuple(
+        spark.table(f"{SILVER}.{t}")
+        .selectExpr(
+            "COUNT(*)",
+            "SUM(CAST(_is_deleted_in_source AS BIGINT))",
+            "unix_micros(MAX(_source_changed_at))",
+        )
+        .first()
+    )
+    for t in SILVER_TABLES
+}
+
+endpoint_sql = "\nUNION ALL\n".join(
+    f"""SELECT '{t}' AS table_name,
+       COUNT_BIG(*) AS row_count,
+       CAST(SUM(CASE WHEN _is_deleted_in_source = 1 THEN 1 ELSE 0 END) AS BIGINT) AS deleted_count,
+       DATEDIFF_BIG(microsecond, '1970-01-01', MAX(_source_changed_at)) AS max_changed_us
+FROM {SILVER_LAKEHOUSE}.dbo.{t}"""
+    for t in SILVER_TABLES
+)
+endpoint_fp = {
+    r["table_name"]: (r["row_count"], r["deleted_count"], r["max_changed_us"])
+    for r in gold_query(endpoint_sql).collect()
+}
+
+stale = [
+    f"{t}: spark={spark_fp[t]} endpoint={endpoint_fp.get(t)}"
+    for t in SILVER_TABLES
+    if spark_fp[t] != endpoint_fp.get(t)
+]
+if stale:
+    raise RuntimeError(
+        "SQL endpoint does not match silver Delta (rows, deleted, max_changed_us):\n"
+        + "\n".join(stale)
+    )
+print(f"Silver SQL endpoint in sync for {len(SILVER_TABLES)} tables.")
 
 # METADATA ********************
 
@@ -226,8 +306,89 @@ def changed_rows(step, table_name):
 # CELL ********************
 
 # ---------------------------------------------------------------------------
-# CELL 4: FACT DETECTOR
+# CELL 4: FACT DETECTORS
 # ---------------------------------------------------------------------------
+def silver_table(name):
+    return spark.table(f"{SILVER}.{name}")
+ 
+ 
+def heal_sql(fact, key, unknown_cols, scd2=(), orphans=()):
+    """Gold-side healing: rows to reprocess although no silver table changed.
+ 
+    unknown_cols  key columns where -1 means a lookup failed; retried on
+                  active rows, because the dimension row may have arrived since.
+    scd2          (dimension, key column, business id, fact date column) for
+                  each Type 2 dimension: rows whose key is not the version
+                  valid at the fact's own date.
+    orphans       (dimension, key column) for every dimension key: rows whose
+                  key has no dimension row, left behind by a rebuild.
+    """
+    parts = [f"""
+        SELECT f.{key} FROM {fact} AS f
+        WHERE f.is_deleted_in_source = 0
+          AND -1 IN ({', '.join('f.' + c for c in unknown_cols)})"""]
+ 
+    for dim, dim_key, dim_id, date_col in scd2:
+        parts.append(f"""
+        SELECT f.{key} FROM {fact} AS f
+        JOIN {dim} AS d ON d.{dim_key} = f.{dim_key}
+        JOIN {dim} AS c
+          ON c.{dim_id} = d.{dim_id}
+         AND f.{date_col} >= c.valid_from_date_key
+         AND f.{date_col} <  c.valid_to_date_key
+        WHERE f.{dim_key} > 0 AND c.{dim_key} <> f.{dim_key}""")
+ 
+    if orphans:
+        missing = "\n           OR ".join(
+            f"NOT EXISTS (SELECT 1 FROM {dim} AS d WHERE d.{dim_key} = f.{dim_key})"
+            for dim, dim_key in orphans)
+        parts.append(f"""
+        SELECT f.{key} FROM {fact} AS f
+        WHERE {missing}""")
+ 
+    return "\nUNION".join(parts)
+ 
+ 
+def detect_fact(step, key, fact, own_table, sources, incremental, heal):
+    """Changed keys for one fact, from every silver table the fact reads.
+ 
+    sources      silver tables whose change feed can change the fact; each
+                 gets its own checkpoint and batch row.
+    incremental  function(changes by table) -> keys, used when every source
+                 has a readable change window.
+    A missing window on any source, or a forced step, means full
+    reconciliation: every silver key plus every gold key, so keys that left
+    silver reach the procedure and are soft-deleted.
+    """
+    reads = {t: changed_rows(step, t) for t in sources}
+    forced = step in FORCED_FULL
+    full_scan = forced or any(r[0] is None for r in reads.values())
+ 
+    if full_scan:
+        keys = (silver_table(own_table).select(key)
+                .unionByName(gold_query(f"SELECT f.{key} FROM {fact} AS f")))
+    else:
+        keys = incremental({t: r[0] for t, r in reads.items()})
+ 
+    keys = (keys.unionByName(gold_query(heal))
+                .where(F.col(key).isNotNull())
+                .distinct())
+ 
+    batches = [
+        {
+            "step_name": step,
+            "source_table": t,
+            "version_from": r[1],
+            "version_to": r[2],
+            "is_full_scan": full_scan,
+            "fallback_reason": r[3] or ("forced" if forced else None),
+        }
+        for t, r in reads.items()
+    ]
+    return keys, batches
+ 
+ 
+# fact_trip: unchanged from the committed version.
 def detect_fact_trip(step):
     trips_ch, t_from, t_to, t_reason = changed_rows(step, "silver_trips")
     loads_ch, l_from, l_to, l_reason = changed_rows(step, "silver_loads")
@@ -337,8 +498,90 @@ def detect_fact_trip(step):
     return keys, batches
  
  
+# fact_delivery_event: the event itself, or its load (which carries the route).
+def detect_fact_delivery_event(step):
+    def incremental(ch):
+        changed_loads = ch["silver_loads"].select("load_id").distinct()
+        return (ch["silver_delivery_events"].select("event_id")
+                .unionByName(silver_table("silver_delivery_events")
+                             .join(changed_loads, "load_id").select("event_id")))
+ 
+    fact = "fact.fact_delivery_event"
+    return detect_fact(
+        step, "event_id", fact, "silver_delivery_events",
+        ["silver_delivery_events", "silver_loads"], incremental,
+        heal_sql(fact, "event_id",
+                 unknown_cols=["scheduled_date_key", "actual_date_key", "facility_key",
+                               "route_key", "delivery_status_key"],
+                 orphans=[("dim.dim_facility", "facility_key"),
+                          ("dim.dim_route", "route_key"),
+                          ("dim.dim_delivery_status", "delivery_status_key")]))
+ 
+ 
+# fact_fuel_purchase: the purchase, its trip, or the trip's load.
+def detect_fact_fuel_purchase(step):
+    def incremental(ch):
+        changed_loads = ch["silver_loads"].select("load_id").distinct()
+        affected_trips = (ch["silver_trips"].select("trip_id")
+                          .unionByName(silver_table("silver_trips")
+                                       .join(changed_loads, "load_id").select("trip_id"))
+                          .distinct())
+        return (ch["silver_fuel_purchases"].select("fuel_purchase_id")
+                .unionByName(silver_table("silver_fuel_purchases")
+                             .join(affected_trips, "trip_id").select("fuel_purchase_id")))
+ 
+    fact = "fact.fact_fuel_purchase"
+    return detect_fact(
+        step, "fuel_purchase_id", fact, "silver_fuel_purchases",
+        ["silver_fuel_purchases", "silver_trips", "silver_loads"], incremental,
+        heal_sql(fact, "fuel_purchase_id",
+                 unknown_cols=["purchase_date_key", "truck_key", "driver_key",
+                               "route_key", "location_key"],
+                 scd2=[("dim.dim_truck", "truck_key", "truck_id", "purchase_date_key"),
+                       ("dim.dim_driver", "driver_key", "driver_id", "purchase_date_key")],
+                 orphans=[("dim.dim_truck", "truck_key"), ("dim.dim_driver", "driver_key"),
+                          ("dim.dim_route", "route_key"), ("dim.dim_location", "location_key")]))
+ 
+ 
+# fact_maintenance: the record only.
+def detect_fact_maintenance(step):
+    fact = "fact.fact_maintenance"
+    return detect_fact(
+        step, "maintenance_id", fact, "silver_maintenance_records",
+        ["silver_maintenance_records"],
+        lambda ch: ch["silver_maintenance_records"].select("maintenance_id"),
+        heal_sql(fact, "maintenance_id",
+                 unknown_cols=["maintenance_date_key", "truck_key", "location_key",
+                               "maintenance_class_key"],
+                 scd2=[("dim.dim_truck", "truck_key", "truck_id", "maintenance_date_key")],
+                 orphans=[("dim.dim_truck", "truck_key"), ("dim.dim_location", "location_key"),
+                          ("dim.dim_maintenance_class", "maintenance_class_key")]))
+ 
+ 
+# fact_safety_incident: the incident only.
+def detect_fact_safety_incident(step):
+    fact = "fact.fact_safety_incident"
+    return detect_fact(
+        step, "incident_id", fact, "silver_safety_incidents",
+        ["silver_safety_incidents"],
+        lambda ch: ch["silver_safety_incidents"].select("incident_id"),
+        heal_sql(fact, "incident_id",
+                 unknown_cols=["incident_date_key", "driver_key", "truck_key",
+                               "location_key", "incident_class_key"],
+                 scd2=[("dim.dim_driver", "driver_key", "driver_id", "incident_date_key"),
+                       ("dim.dim_truck", "truck_key", "truck_id", "incident_date_key")],
+                 orphans=[("dim.dim_driver", "driver_key"), ("dim.dim_truck", "truck_key"),
+                          ("dim.dim_location", "location_key"),
+                          ("dim.dim_incident_class", "incident_class_key")]))
+ 
+ 
+# Step name -> detector, worklist table, key column.
 STEPS = {
-    "fact_trip": detect_fact_trip,
+    "fact_trip":            {"detect": detect_fact_trip,            "stg": "stg.changed_trip_keys",            "key": "trip_id"},
+    "fact_delivery_event":  {"detect": detect_fact_delivery_event,  "stg": "stg.changed_delivery_event_keys",  "key": "event_id"},
+    "fact_fuel_purchase":   {"detect": detect_fact_fuel_purchase,   "stg": "stg.changed_fuel_purchase_keys",   "key": "fuel_purchase_id"},
+    "fact_maintenance":     {"detect": detect_fact_maintenance,     "stg": "stg.changed_maintenance_keys",     "key": "maintenance_id"},
+    "fact_safety_incident": {"detect": detect_fact_safety_incident, "stg": "stg.changed_safety_incident_keys", "key": "incident_id"},
 }
 
 # METADATA ********************
@@ -351,67 +594,52 @@ STEPS = {
 # CELL ********************
 
 # ---------------------------------------------------------------------------
-# CELL 5: WRITE WORKLIST + CDF LEDGER
+# CELL 5: WRITE WORKLISTS + CDF LEDGER
 # ---------------------------------------------------------------------------
 batch_schema = StructType([
-    StructField("run_id",       StringType(),  False),
-    StructField("step_name",    StringType(),  False),
-    StructField("source_table", StringType(),  False),
-    StructField("version_from", LongType(),    True),
-    StructField("version_to",   LongType(),    False),
-    StructField("is_full_scan", BooleanType(), False),
+    StructField("run_id",       StringType(),    False),
+    StructField("step_name",    StringType(),    False),
+    StructField("source_table", StringType(),    False),
+    StructField("version_from", LongType(),      True),
+    StructField("version_to",   LongType(),      False),
+    StructField("is_full_scan", BooleanType(),   False),
     StructField("detected_at",  TimestampType(), False),
 ])
  
-for step in [s.strip() for s in steps.split(",") if s.strip()]:
-    if step not in STEPS:
-        raise ValueError(f"Unknown step '{step}'. Known steps: {sorted(STEPS)}")
+requested = [s.strip() for s in steps.split(",") if s.strip()]
+unknown_steps = [s for s in requested if s not in STEPS]
+if unknown_steps:
+    raise ValueError(f"Unknown step(s) {unknown_steps}. Known steps: {sorted(STEPS)}")
  
-    keys, batches = STEPS[step](step)
+for step in requested:
+    spec = STEPS[step]
+    keys, batches = spec["detect"](step)
  
     now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
  
-    key_frame = (
-        keys.select(
-            F.lit(run_id).cast("string").alias("run_id"),
-            F.col("trip_id").cast("string").alias("trip_id"),
-            F.lit(now).cast("timestamp").alias("detected_at"),
-        )
+    key_frame = keys.select(
+        F.lit(run_id).cast("string").alias("run_id"),
+        F.col(spec["key"]).cast("string").alias(spec["key"]),
+        F.lit(now).cast("timestamp").alias("detected_at"),
     )
  
     key_count = key_frame.count()
     if key_count:
-        (
-            key_frame.write
-                     .mode("append")
-                     .synapsesql(f"{WAREHOUSE}.stg.changed_trip_keys")
-        )
+        key_frame.write.mode("append").synapsesql(f"{WAREHOUSE}.{spec['stg']}")
  
     ledger_rows = [
-        (
-            run_id,
-            b["step_name"],
-            b["source_table"],
-            b["version_from"],
-            b["version_to"],
-            b["is_full_scan"],
-            now,
-        )
+        (run_id, b["step_name"], b["source_table"], b["version_from"],
+         b["version_to"], b["is_full_scan"], now)
         for b in batches
     ]
- 
-    (
-        spark.createDataFrame(ledger_rows, batch_schema)
-             .write
-             .mode("append")
-             .synapsesql(f"{WAREHOUSE}.log.cdf_batch")
-    )
+    (spark.createDataFrame(ledger_rows, batch_schema)
+          .write.mode("append")
+          .synapsesql(f"{WAREHOUSE}.log.cdf_batch"))
  
     reasons = "; ".join(
         f"{b['source_table']}={b['fallback_reason']}"
         for b in batches if b["fallback_reason"]
     )
- 
     print(
         f"{step}: keys={key_count:,}; full_scan={batches[0]['is_full_scan']}"
         + (f"; fallback={reasons}" if reasons else "")
@@ -429,30 +657,58 @@ for step in [s.strip() for s in steps.split(",") if s.strip()]:
 # ---------------------------------------------------------------------------
 # CELL 6: HANDOFF CHECKS
 # ---------------------------------------------------------------------------
-print("\nWorklist by run_id:")
-display(
-    spark.read
-         .synapsesql(f"{WAREHOUSE}.stg.changed_trip_keys")
-         .filter(F.col("run_id") == run_id)
-         .groupBy("run_id")
-         .agg(F.count("trip_id").alias("trip_keys"))
-)
+print("\nWorklists for this run:")
+for step in requested:
+    spec = STEPS[step]
+    n = gold_query(
+        f"SELECT COUNT(*) AS n FROM {spec['stg']} AS k WHERE k.run_id = '{run_id}'"
+    ).first()["n"]
+    print(f"  {step:<22} {spec['stg']:<36} {n:,}")
  
 print("\nCDF batches recorded:")
 display(
-    spark.read
-         .synapsesql(f"{WAREHOUSE}.log.cdf_batch")
-         .filter(F.col("run_id") == run_id)
-         .select("run_id", "step_name", "source_table",
-                 "version_from", "version_to", "is_full_scan", "detected_at")
-         .orderBy("source_table")
+    gold_query(f"""
+        SELECT b.step_name, b.source_table, b.version_from, b.version_to, b.is_full_scan
+        FROM log.cdf_batch AS b
+        WHERE b.run_id = '{run_id}'""")
+    .orderBy("step_name", "source_table")
 )
  
 print(
-    "\nNext step: execute the Warehouse procedure with the same run_id. "
-    "The checkpoint is not trusted until the procedure logs 'succeeded'."
+    "\nNext: run each step's procedure with the same run_id. A step's "
+    "checkpoint is not trusted until its procedure logs 'succeeded'."
 )
  
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+for table, key in [("delivery_events", "event_id"), ("fuel_purchases", "fuel_purchase_id"),
+                   ("maintenance_records", "maintenance_id"), ("safety_incidents", "incident_id")]:
+    t = f"lh_logistics_silver.dbo.silver_{table}"
+    spark.sql(f"""SELECT '{table}' AS tbl, {key}, _is_deleted_in_source, _source_changed_at,
+                         _silver_updated_at, _silver_run_id
+                  FROM {t} WHERE _is_deleted_in_source OR _is_deleted_in_source IS NULL""").show(truncate=False)
+    (spark.sql(f"DESCRIBE HISTORY {t}")
+          .selectExpr("version", "timestamp", "operation",
+                      "operationMetrics['numTargetRowsUpdated'] AS updated")
+          .show(6, truncate=False))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
 
 # METADATA ********************
 

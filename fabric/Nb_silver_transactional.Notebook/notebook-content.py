@@ -60,7 +60,7 @@
  
 load_mode     = "full"   # "full" | "incremental"
 ingest_from   = ""       # ISO date; incremental reads bronze rows on or after this
-tables_filter = "loads,trips"       # comma-separated subset for targeted reruns
+tables_filter = ""       # comma-separated subset for targeted reruns
 run_maintenance = False   # True only on a scheduled maintenance run
 
 # METADATA ********************
