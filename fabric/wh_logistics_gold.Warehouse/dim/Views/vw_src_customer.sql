@@ -7,7 +7,8 @@ SELECT s.customer_id,
        COALESCE(s.account_status,       'Not Recorded') AS account_status,
        s.credit_terms_days,
        s.contract_start_date,
-       s.annual_revenue_potential
+       s.annual_revenue_potential,
+       s._is_deleted_in_source                          AS is_deleted_in_source
 FROM lh_logistics_silver.dbo.silver_customers AS s;
 
 GO

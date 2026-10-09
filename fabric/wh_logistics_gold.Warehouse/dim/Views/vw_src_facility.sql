@@ -10,7 +10,8 @@ SELECT s.facility_id,
        s.dock_doors,
        s.latitude                                  AS facility_latitude,
        s.longitude                                 AS facility_longitude,
-       s.is_centroid_coordinate
+       s.is_centroid_coordinate,
+       s._is_deleted_in_source                     AS is_deleted_in_source
 FROM lh_logistics_silver.dbo.silver_facilities AS s
 LEFT JOIN ref.us_state AS us ON us.state_code = s.state;
 

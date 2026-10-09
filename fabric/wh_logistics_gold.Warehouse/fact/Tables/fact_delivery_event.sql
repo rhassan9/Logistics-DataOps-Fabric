@@ -11,7 +11,8 @@ CREATE TABLE [fact].[fact_delivery_event] (
     [actual_datetime]            DATETIME2 (6)   NULL,
     [detention_minutes]          INT             NULL,
     [billable_detention_minutes] INT             NULL,
-    [arrival_variance_minutes]   DECIMAL (10, 1) NULL
+    [arrival_variance_minutes]   DECIMAL (10, 1) NULL,
+    [is_deleted_in_source]       BIT             NOT NULL
 );
 
 

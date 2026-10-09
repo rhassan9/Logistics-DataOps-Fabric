@@ -19,7 +19,8 @@ CREATE TABLE [fact].[fact_load_lifecycle] (
     [dispatch_to_pickup_hours]  DECIMAL (10, 2) NULL,
     [pickup_to_delivery_hours]  DECIMAL (10, 2) NULL,
     [booking_to_delivery_hours] DECIMAL (10, 2) NULL,
-    [is_timestamp_reversed]     BIT             NOT NULL
+    [is_timestamp_reversed]     BIT             NOT NULL,
+    [is_deleted_in_source]      BIT             NOT NULL
 );
 
 

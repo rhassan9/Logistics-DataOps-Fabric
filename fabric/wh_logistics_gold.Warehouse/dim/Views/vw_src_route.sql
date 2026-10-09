@@ -11,7 +11,8 @@ SELECT s.route_id,
        s.typical_distance_miles,
        s.base_rate_per_mile,
        s.fuel_surcharge_rate,
-       s.typical_transit_days
+       s.typical_transit_days,
+       s._is_deleted_in_source                      AS is_deleted_in_source
 FROM lh_logistics_silver.dbo.silver_routes AS s
 LEFT JOIN ref.us_state AS os ON os.state_code = s.origin_state
 LEFT JOIN ref.us_state AS ds ON ds.state_code = s.destination_state;

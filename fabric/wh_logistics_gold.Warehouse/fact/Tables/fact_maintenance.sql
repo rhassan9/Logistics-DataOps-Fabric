@@ -8,7 +8,8 @@ CREATE TABLE [fact].[fact_maintenance] (
     [labor_cost]            DECIMAL (14, 2) NULL,
     [parts_cost]            DECIMAL (14, 2) NULL,
     [downtime_hours]        DECIMAL (10, 2) NULL,
-    [odometer_reading]      INT             NULL
+    [odometer_reading]      INT             NULL,
+    [is_deleted_in_source]  BIT             NOT NULL
 );
 
 

@@ -7,9 +7,8 @@ CREATE TABLE [log].[etl_run] (
     [rows_read]           BIGINT         NULL,
     [rows_inserted]       BIGINT         NULL,
     [rows_updated]        BIGINT         NULL,
+    [rows_deleted]        BIGINT         NULL,
     [rows_unknown_member] BIGINT         NULL,
-    [watermark_from]      DATETIME2 (6)  NULL,
-    [watermark_to]        DATETIME2 (6)  NULL,
     [message]             VARCHAR (4000) NULL
 );
 

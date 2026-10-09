@@ -11,6 +11,7 @@ CREATE TABLE [dim].[dim_customer] (
     [valid_from_date_key]      INT             NOT NULL,
     [valid_to_date_key]        INT             NOT NULL,
     [is_current]               BIT             NOT NULL,
+    [is_deleted]               BIT             NOT NULL,
     [version_reason]           VARCHAR (100)   NOT NULL
 );
 

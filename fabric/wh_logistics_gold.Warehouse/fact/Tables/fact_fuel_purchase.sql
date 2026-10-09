@@ -8,7 +8,8 @@ CREATE TABLE [fact].[fact_fuel_purchase] (
     [trip_id]              VARCHAR (20)    NOT NULL,
     [gallons]              DECIMAL (10, 2) NULL,
     [total_cost]           DECIMAL (14, 2) NULL,
-    [is_capacity_exceeded] BIT             NOT NULL
+    [is_capacity_exceeded] BIT             NOT NULL,
+    [is_deleted_in_source] BIT             NOT NULL
 );
 
 
