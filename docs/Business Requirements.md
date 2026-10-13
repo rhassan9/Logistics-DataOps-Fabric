@@ -284,16 +284,21 @@ The source ships two pre-computed monthly aggregates, `driver_monthly_metrics` a
 `truck_utilization_metrics`. They are OLAP artifacts and do not enter the pipeline, but they
 are loaded separately into the operations lakehouse as an expected baseline.
 
-Gold rebuilds both from transactional data and reconciles against that baseline. Two metrics
-have been verified as exactly reproducible: trip counts and total miles, across all 4,464
-driver-months and 3,312 truck-months, with no rows on either side only. For those two
-metrics, a mismatch in gold is a defect in gold rather than noise in the source. No such
-claim is made for the remaining metrics until they have been tested the same way.
+Gold rebuilds both from its facts on every run and reconciles against that baseline. Each
+metric has one definition, fixed before any comparison, and is never varied to force a match.
 
-The remaining metrics on those tables (`average_mpg`, `total_fuel_gallons`,
-`on_time_delivery_rate`, `average_idle_hours`, `utilization_rate`) have no documented formula.
-They are reconciled after gold is built, and any that cannot be reproduced are recorded as
-definition-unknown rather than reverse-engineered to force a match.
+Seven metrics reproduce the baseline exactly on all 4,464 driver-months and 3,312
+truck-months, with no rows on either side only: trip counts, total miles, revenue, fuel
+gallons, maintenance events, maintenance cost and downtime hours. For those, a mismatch in
+gold is a defect in gold rather than noise in the source, and the reconciliation fails the
+run.
+
+`average_idle_hours` and `on_time_delivery_rate` are reported on every run without failing
+it. `average_mpg` is recorded as definition-unknown: total miles over total gallons does not
+reproduce it, consistent with the source's trip-level `average_mpg` being generated
+independently of miles and gallons.
+`utilization_rate` has no definition derivable from the data and is recorded as
+definition-unknown without a comparison.
 
 These aggregates exist for reconciliation, not performance. At 541,172 fact rows the
 warehouse does not need pre-aggregation, and they are labelled as validation artifacts so

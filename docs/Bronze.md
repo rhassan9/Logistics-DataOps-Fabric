@@ -43,6 +43,12 @@ On a date column this is not an edge case. 85,410 loads span 1,096 dates, so abo
 
 The re-read produces duplicates. Those are retained here and resolved in silver, because bronze does not deduplicate.
 
+### Change capture
+
+The incremental watermark is a business date column (`load_date`, `incident_date` and so on). It captures rows added at the source, not later updates to existing rows, and a row deleted at the source simply stops appearing. Full-mode batches are complete snapshots of each table, which is what lets silver detect deletions and date each key's current state.
+
+Capturing every update and delete as it happens needs change data capture at the source, without altering the source schema. None of Fabric's change-capture paths support this source: Copy job's CDC sources do not include PostgreSQL, Eventstream's PostgreSQL CDC connector covers managed cloud PostgreSQL services rather than Neon, and mirroring for PostgreSQL covers Azure Database for PostgreSQL flexible server only. Silver's contract with gold is defined independently of how changes are captured, so a CDC source changes bronze and silver only.
+
 ### Write behaviour
 
 | Situation | Behaviour |
