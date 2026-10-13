@@ -1,6 +1,6 @@
 /*
 Gold fact_trip loader
-
+ 
 Responsibilities:
   1. Validate that change detection produced both dependency batch records.
   2. Load the worklist for this run_id.
@@ -14,20 +14,20 @@ Responsibilities:
   9. Consume the staging worklist transactionally with the fact write.
  10. Log success only after COMMIT, so the CDF checkpoint advances only after
      the Gold publication succeeded.
-
+ 
 Important semantic decision:
   silver_trips._is_deleted_in_source controls the fact deletion state.
   silver_loads is NOT filtered on its delete flag. A live trip can still use
   the retained load row to preserve the route/last-known load attributes.
 */
-
+ 
 CREATE   PROCEDURE fact.usp_load_fact_trip
     @run_id            VARCHAR(64),
     @allow_mass_delete BIT
 AS
 BEGIN
     SET NOCOUNT ON;
-
+ 
     DECLARE
         @step                    VARCHAR(128) = 'fact_trip',
         @source                  VARCHAR(128) = 'silver_trips,silver_loads',
@@ -43,16 +43,16 @@ BEGIN
         @rows_missing_deleted    BIGINT = 0,
         @active_before           BIGINT = 0,
         @msg                     VARCHAR(4000);
-
+ 
     IF @run_id IS NULL OR @allow_mass_delete IS NULL
         THROW 50611,
               'fact.usp_load_fact_trip: @run_id and @allow_mass_delete are required.',
               1;
-
+ 
     EXEC log.usp_write_run_event
          @run_id, @step, @source, 'started',
          NULL, NULL, NULL, NULL, NULL, NULL;
-
+ 
     BEGIN TRY
         /* Both Silver dependencies are part of the fact contract. */
         IF
@@ -68,22 +68,22 @@ BEGIN
                   'fact.usp_load_fact_trip: change detection must record both silver_trips and silver_loads for this run_id.',
                   1;
         END;
-
+ 
         DROP TABLE IF EXISTS #trip_keys;
         CREATE TABLE #trip_keys
         (
             trip_id VARCHAR(20) NOT NULL
         ) WITH (DISTRIBUTION = ROUND_ROBIN);
-
+ 
         INSERT INTO #trip_keys (trip_id)
         SELECT DISTINCT k.trip_id
         FROM stg.changed_trip_keys AS k
         WHERE k.run_id = @run_id
           AND k.trip_id IS NOT NULL;
-
+ 
         SELECT @keys = COUNT(*) FROM #trip_keys;
         SET @rows_read = @keys;
-
+ 
         DROP TABLE IF EXISTS #trip_stage;
         CREATE TABLE #trip_stage
         (
@@ -101,7 +101,7 @@ BEGIN
             is_idle_implausible    BIT,
             is_deleted_in_source   BIT
         ) WITH (DISTRIBUTION = ROUND_ROBIN);
-
+ 
         /*
         Read current Silver state without filtering deleted trips away.
         That flag is a real state on the fact row and must reach Gold.
@@ -123,120 +123,57 @@ BEGIN
             is_deleted_in_source
         )
         SELECT
-            CASE
-                WHEN t.dispatch_date IS NULL THEN 0
-                WHEN dd.date_key IS NULL THEN -1
-                ELSE dd.date_key
-            END AS dispatch_date_key,
-            CASE
-                WHEN t.driver_id IS NULL THEN 0
-                ELSE COALESCE(dr.driver_key, -1)
-            END AS driver_key,
-            CASE
-                WHEN t.truck_id IS NULL THEN 0
-                ELSE COALESCE(tk.truck_key, -1)
-            END AS truck_key,
-            CASE
-                WHEN t.trailer_id IS NULL THEN 0
-                ELSE COALESCE(tl.trailer_key, -1)
-            END AS trailer_key,
-            CASE
-                WHEN t.load_id  IS NULL THEN 0    -- trip records no load: Missing
-                WHEN l.load_id  IS NULL THEN -1   -- load_id fails its lookup: Unknown
-                WHEN l.route_id IS NULL THEN 0    -- load records no route: Missing
-                ELSE COALESCE(rt.route_key, -1)
-            END AS route_key,
-            t.trip_id,
-            t.load_id,
-            t.actual_distance_miles,
-            t.actual_duration_hours,
-            t.fuel_gallons_used,
-            t.idle_time_hours,
-            t.is_idle_implausible,
-            CAST(CASE WHEN t._is_deleted_in_source = 1 THEN 1 ELSE 0 END AS BIT)
-                AS is_deleted_in_source
-        FROM #trip_keys AS ck
-        INNER JOIN lh_logistics_silver.dbo.silver_trips AS t
-            ON t.trip_id = ck.trip_id
-        LEFT JOIN lh_logistics_silver.dbo.silver_loads AS l
-            ON l.load_id = t.load_id
+            CASE WHEN s.dispatch_date IS NULL THEN 0
+                 WHEN dd.date_key IS NULL THEN -1
+                 ELSE dd.date_key END,
+            CASE WHEN s.driver_id  IS NULL THEN 0 ELSE COALESCE(dr.driver_key, -1)  END,
+            CASE WHEN s.truck_id   IS NULL THEN 0 ELSE COALESCE(tk.truck_key, -1)   END,
+            CASE WHEN s.trailer_id IS NULL THEN 0 ELSE COALESCE(tl.trailer_key, -1) END,
+            CASE WHEN s.load_id    IS NULL THEN 0    -- trip records no load: Missing
+                 WHEN s.load_found IS NULL THEN -1   -- load_id fails its lookup: Unknown
+                 WHEN s.route_id   IS NULL THEN 0    -- load records no route: Missing
+                 ELSE COALESCE(rt.route_key, -1) END,
+            s.trip_id,
+            s.load_id,
+            s.actual_distance_miles,
+            s.actual_duration_hours,
+            s.fuel_gallons_used,
+            s.idle_time_hours,
+            s.is_idle_implausible,
+            CAST(CASE WHEN s._is_deleted_in_source = 1 THEN 1 ELSE 0 END AS BIT)
+        FROM
+        (
+            /* The dispatch date key is computed once and used for every lookup. */
+            SELECT t.trip_id, t.load_id, t.driver_id, t.truck_id, t.trailer_id,
+                   t.dispatch_date, t.actual_distance_miles, t.actual_duration_hours,
+                   t.fuel_gallons_used, t.idle_time_hours, t.is_idle_implausible,
+                   t._is_deleted_in_source,
+                   l.load_id AS load_found, l.route_id,
+                   CASE WHEN t.dispatch_date IS NULL THEN 0
+                        ELSE YEAR(t.dispatch_date) * 10000
+                           + MONTH(t.dispatch_date) * 100
+                           + DAY(t.dispatch_date) END AS dispatch_key
+            FROM #trip_keys AS ck
+            INNER JOIN lh_logistics_silver.dbo.silver_trips AS t
+                ON t.trip_id = ck.trip_id
+            LEFT JOIN lh_logistics_silver.dbo.silver_loads AS l
+                ON l.load_id = t.load_id
+        ) AS s
         LEFT JOIN dim.dim_date AS dd
-            ON dd.date_key =
-               CASE WHEN t.dispatch_date IS NULL THEN 0
-                    ELSE YEAR(t.dispatch_date) * 10000
-                       + MONTH(t.dispatch_date) * 100
-                       + DAY(t.dispatch_date)
-               END
-           AND dd.date_key > 0
+          ON dd.date_key = s.dispatch_key AND dd.date_key > 0
         LEFT JOIN dim.dim_driver AS dr
-            ON dr.driver_id = t.driver_id
-           AND dr.driver_key > 0
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) >= dr.valid_from_date_key
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) < dr.valid_to_date_key
+          ON dr.driver_id = s.driver_id AND dr.driver_key > 0
+         AND s.dispatch_key >= dr.valid_from_date_key AND s.dispatch_key < dr.valid_to_date_key
         LEFT JOIN dim.dim_truck AS tk
-            ON tk.truck_id = t.truck_id
-           AND tk.truck_key > 0
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) >= tk.valid_from_date_key
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) < tk.valid_to_date_key
+          ON tk.truck_id = s.truck_id AND tk.truck_key > 0
+         AND s.dispatch_key >= tk.valid_from_date_key AND s.dispatch_key < tk.valid_to_date_key
         LEFT JOIN dim.dim_trailer AS tl
-            ON tl.trailer_id = t.trailer_id
-           AND tl.trailer_key > 0
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) >= tl.valid_from_date_key
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) < tl.valid_to_date_key
+          ON tl.trailer_id = s.trailer_id AND tl.trailer_key > 0
+         AND s.dispatch_key >= tl.valid_from_date_key AND s.dispatch_key < tl.valid_to_date_key
         LEFT JOIN dim.dim_route AS rt
-            ON rt.route_id = l.route_id
-           AND rt.route_key > 0
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) >= rt.valid_from_date_key
-           AND (
-                CASE WHEN t.dispatch_date IS NULL THEN 0
-                     ELSE YEAR(t.dispatch_date) * 10000
-                        + MONTH(t.dispatch_date) * 100
-                        + DAY(t.dispatch_date)
-                END
-               ) < rt.valid_to_date_key;
-
+          ON rt.route_id = s.route_id AND rt.route_key > 0
+         AND s.dispatch_key >= rt.valid_from_date_key AND s.dispatch_key < rt.valid_to_date_key;
+ 
         SELECT
             @rows_distinct = COUNT(DISTINCT st.trip_id),
             @rows_unknown = COALESCE(
@@ -252,24 +189,24 @@ BEGIN
                 ), 0
             )
         FROM #trip_stage AS st;
-
+ 
         IF (SELECT COUNT(*) FROM #trip_stage) <> @rows_distinct
             THROW 50613,
                   'fact.usp_load_fact_trip: a trip resolved to more than one dimension version.',
                   1;
-
+ 
         SELECT @rows_existing = COUNT(*)
         FROM fact.fact_trip AS f
         INNER JOIN #trip_stage AS st
             ON st.trip_id = f.trip_id;
-
+ 
         SET @rows_inserted = (SELECT COUNT(*) FROM #trip_stage) - @rows_existing;
         SET @rows_updated = @rows_existing;
-
+ 
         SELECT @active_before = COUNT(*)
         FROM fact.fact_trip AS f
         WHERE f.is_deleted_in_source = 0;
-
+ 
         /* Explicit Silver soft deletes. */
         SELECT @rows_explicit_deleted = COUNT(*)
         FROM fact.fact_trip AS f
@@ -277,7 +214,7 @@ BEGIN
             ON st.trip_id = f.trip_id
         WHERE f.is_deleted_in_source = 0
           AND st.is_deleted_in_source = 1;
-
+ 
         /* Defensive fallback for an unexpected physical absence from Silver. */
         SELECT @rows_missing_deleted = COUNT(*)
         FROM fact.fact_trip AS f
@@ -287,9 +224,9 @@ BEGIN
             ON st.trip_id = f.trip_id
         WHERE f.is_deleted_in_source = 0
           AND st.trip_id IS NULL;
-
+ 
         SET @rows_deleted = @rows_explicit_deleted + @rows_missing_deleted;
-
+ 
         IF @allow_mass_delete = 0
            AND @rows_deleted > 0
            AND @active_before > 0
@@ -299,14 +236,14 @@ BEGIN
                   'fact.usp_load_fact_trip: more than 10 percent of active trips would be soft-deleted; investigate Silver before using @allow_mass_delete = 1.',
                   1;
         END;
-
+ 
         BEGIN TRANSACTION;
-
+ 
         /* Rebuild each changed/current row. This also heals Unknown keys and restores
            rows whose Silver delete flag returned to 0. */
         DELETE FROM fact.fact_trip
         WHERE trip_id IN (SELECT trip_id FROM #trip_stage);
-
+ 
         INSERT INTO fact.fact_trip
         (
             dispatch_date_key,
@@ -338,39 +275,39 @@ BEGIN
             st.is_idle_implausible,
             st.is_deleted_in_source
         FROM #trip_stage AS st;
-
+ 
         /* Gold-only keys are soft-deleted rather than physically removed. */
         UPDATE fact.fact_trip
         SET is_deleted_in_source = 1
         WHERE is_deleted_in_source = 0
           AND trip_id IN (SELECT ck.trip_id FROM #trip_keys AS ck)
           AND trip_id NOT IN (SELECT st.trip_id FROM #trip_stage AS st);
-
+ 
         /* Consume work only after fact publication is part of the same transaction. */
         DELETE FROM stg.changed_trip_keys
         WHERE run_id = @run_id;
-
+ 
         COMMIT TRANSACTION;
-
+ 
         EXEC log.usp_write_run_event
              @run_id, @step, @source, 'succeeded',
              @rows_read, @rows_inserted, @rows_updated,
              @rows_deleted, @rows_unknown,
              'fact_trip published; checkpoint may now advance';
-
+ 
         DROP TABLE IF EXISTS #trip_stage;
         DROP TABLE IF EXISTS #trip_keys;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-
+ 
         SET @msg = LEFT(ERROR_MESSAGE(), 4000);
-
+ 
         EXEC log.usp_write_run_event
              @run_id, @step, @source, 'failed',
              NULL, NULL, NULL, NULL, NULL, @msg;
-
+ 
         THROW;
     END CATCH;
 END;

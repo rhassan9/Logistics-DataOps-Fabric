@@ -59,7 +59,7 @@
 # ---------------------------------------------------------------------------
 # CELL 1: PARAMETERS
 # ---------------------------------------------------------------------------
-run_id = "manual-20261011-L4C"
+run_id = ""
 # comma-separated as more fact detectors are added
 steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident,fact_load_lifecycle"
 full_scan_steps = ""  # comma-separated steps to force a full reconciliation
@@ -678,8 +678,8 @@ for step in requested:
         F.lit(run_id).cast("string").alias("run_id"),
         F.col(spec["key"]).cast("string").alias(spec["key"]),
         F.lit(now).cast("timestamp").alias("detected_at"),
-    )
- 
+    ).localCheckpoint()
+
     key_count = key_frame.count()
     if key_count:
         key_frame.write.mode("append").synapsesql(f"{WAREHOUSE}.{spec['stg']}")

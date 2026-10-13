@@ -2,10 +2,10 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
   "metadata": {
     "type": "Notebook",
-    "displayName": "Nb_validation_baseline"
+    "displayName": "nb_silver_create_tables"
   },
   "config": {
     "version": "2.0",
-    "logicalId": "ea02261c-297c-8b94-45ed-a53e357a7dde"
+    "logicalId": "fbebf9ee-8377-bec1-4bbe-37b8e537b49e"
   }
 }
