@@ -2,6 +2,12 @@
 
 Bronze preserves source data exactly as it arrives. No cleaning, no renaming, no type coercion, no deduplication. Four lineage columns are the only additions.
 
+**In short**
+
+- Twelve tables read over JDBC into append-only Delta, with four lineage columns and an inclusive watermark that never drops boundary rows.
+- Built twice, as a Spark notebook and as a Copy job, and compared; the notebook is primary for correctness at the watermark boundary.
+- Full-mode batches are complete snapshots, which is how silver detects source deletions. See [Change capture](#change-capture).
+
 The layer is append-only. Incremental runs add rows and never rewrite or delete existing ones, which makes bronze the audit record for everything downstream. Corrections belong in silver.
 
 Bronze is implemented twice: as a Spark notebook and as a Fabric Copy job. Microsoft's guidance recommends Copy job as the default for raw ingestion. The notebook is the primary path here for the reasons in [Comparison](#comparison) below.
@@ -25,6 +31,11 @@ Three layers, following Microsoft's security and CI/CD guidance:
 Secrets are never passed as notebook parameters, and no credential appears in the
 notebook or the repository. The Variable Library's value sets mean promoting the notebook
 between environments requires no code change.
+
+Key Vault is wired in the notebook but not yet provisioned, because it needs an Azure
+subscription, which arrives with deployment in M4. Until then `keyvault_uri` is empty and the
+password is supplied for the session only, never stored. The Development, Test and Production
+value sets exist with no overrides, since only one environment exists today.
 
 ### Lineage columns
 

@@ -4,6 +4,12 @@ Silver holds one validated, non-aggregated row for every business key the source
 
 Writes are MERGE on the business key, so loads are idempotent and silver holds current state (SCD Type 1). Gold applies Type 2 where a dimension needs history.
 
+**In short**
+
+- One row per business key ever seen, current values, built by MERGE; transactional tables by a Spark notebook, reference tables by Dataflow Gen2.
+- Rows are never deleted: `_is_deleted_in_source` and `_source_changed_at` form a contract with gold that survives a change of capture method. See [The contract with gold](#the-contract-with-gold).
+- Data quality problems are flagged, not removed; two boundary defects in `arrival_status` were found by reconciling against the source flag. See [Validation](#validation).
+
 ---
 
 ## Artifacts

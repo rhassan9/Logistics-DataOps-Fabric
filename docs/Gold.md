@@ -2,6 +2,13 @@
 
 Kimball star schema in `wh_logistics_gold`, a Fabric Data Warehouse built with T-SQL stored procedures and served through a Direct Lake semantic model.
 
+**In short**
+
+- Six facts, eight dimensions and four junk dimensions, with three special members on every dimension: Missing, Unknown and Not Applicable.
+- Facts load incrementally: a Spark notebook reads silver's change feed, and T-SQL procedures rebuild exactly the changed keys, inside one transaction per fact, with soft deletes and a mass-deletion guard. See [Loading the facts](#loading-the-facts).
+- Every fact was tested through the real pipeline, and five defects were found and fixed. See [Testing](#testing).
+- Ten metric comparisons reproduce the publisher's monthly baselines exactly and fail the run on any mismatch. See [Reconciliation](#reconciliation).
+
 Gold reads silver two ways. The stored procedures read current state through the silver SQL analytics endpoint, with cross-database queries. A Spark notebook, `nb_gold_change_detection`, reads silver's Delta change data feed to decide which business keys each fact must rebuild, because the change feed is a Delta capability that T-SQL cannot read. The notebook hands the keys to the warehouse; the procedures do all the modelling.
 
 **Collation: `Latin1_General_100_BIN2_UTF8`**, the Fabric default, case-sensitive, set at warehouse creation and not changeable afterwards.
@@ -300,7 +307,7 @@ Every fact loads in two halves sharing one `run_id`: the change detection notebo
 
 **It refuses a reused `run_id`.** A run_id names one detection and the gold load that consumes it. Before reading anything, the notebook checks that its run_id appears in neither the run log nor the change-feed ledger.
 
-**It proves the warehouse sees current silver.** The procedures read silver through the SQL analytics endpoint, whose metadata Microsoft documents as syncing in the background, while the notebook reads Delta directly. The notebook forces a metadata sync through Semantic Link (`refresh_sql_endpoint_metadata`), then compares a fingerprint of all 12 silver tables as Spark and the endpoint each see them: row count, deleted count and the latest `_source_changed_at` in microseconds. Any difference stops the run before a key is staged.
+**It checks that the warehouse sees current silver.** The procedures read silver through the SQL analytics endpoint, whose metadata Microsoft documents as syncing in the background, while the notebook reads Delta directly. The notebook forces a metadata sync through Semantic Link (`refresh_sql_endpoint_metadata`), then compares a fingerprint of all 12 silver tables as Spark and the endpoint each see them: row count, deleted count and the latest `_source_changed_at` in microseconds. Any difference stops the run before a key is staged.
 
 **It reads each source table's change feed from that fact's own checkpoint.** Each fact declares the silver tables it reads, and each (fact, table) pair has a checkpoint: the last Delta version a successful run of that fact consumed. The notebook reads the window after the checkpoint up to the current version and derives the affected keys:
 
@@ -338,7 +345,7 @@ Each procedure follows the same sequence:
 
 ### Checkpoints
 
-`log.vw_cdf_checkpoint` advances a fact's checkpoint only to a window that a **later** `succeeded` event of the same fact and run_id followed. Detection alone never moves it, so a failed or abandoned run is re-read in full by the next one. Requiring the success to come after the detection means a window recorded under a run_id that had already succeeded can never be counted as processed.
+`log.vw_cdf_checkpoint` gives each (fact, source table) pair the window of its **most recent** successful run, counting a window only when a `succeeded` event of the same fact and run_id followed its detection. Detection alone never moves a checkpoint, so a failed or abandoned run is re-read in full by the next one, and a window recorded under a run_id that had already succeeded is never counted as processed. Taking the most recent window rather than the highest version keeps the checkpoint correct after a silver table is recreated and its versions restart.
 
 ### Operations
 
@@ -381,10 +388,11 @@ Every fact was tested through the real pipeline with a fixed sequence of runs, e
 
 Each run is checked in both directions against silver: row and key counts, every column compared with `EXCEPT` both ways, a key oracle that translates gold's surrogate keys back to business ids, worklist leftovers and checkpoint positions. For `fact_load_lifecycle` an independent oracle rebuilds every row from silver, and a cross-fact check confirms that every live trip's resources and dispatch date agree with the lifecycle row of its load.
 
-Review and testing found four defects, each fixed before its fact was committed:
+Review and testing found five defects, each fixed:
 
 - **Reused run_ids skipped changes.** The checkpoint view first matched a window to a success by run_id alone, so a detection repeated under a run_id that had already succeeded advanced the checkpoint without any procedure processing its keys. The cross-fact check exposed it as one lifecycle row disagreeing with `fact_trip`. The view now requires the success to follow the detection, and the notebook rejects reused run_ids.
 - **A trip or event moving between loads left the old load stale.** The change feed was read from post-update images only. The pre-update image is now included.
+- **A recreated silver table could skip changes.** The checkpoint was the highest version any successful run had consumed. A recreated table restarts its versions at 0, so the old, higher checkpoint stayed the maximum: every run repeated a full scan until the new table passed the old number, and the next window then started there, skipping the versions in between. The checkpoint is now the most recent successful window.
 - **Route Missing and Unknown were conflated.** A trip whose load had no route resolved to Unknown, which signals a broken reference, instead of Missing.
 - **Rebuilt dimensions orphaned fact keys.** Rebuilding a dimension reassigns its surrogate keys, and facts loaded earlier pointed at keys that no longer existed. Repair now re-queues any fact row whose key has no dimension row.
 
@@ -396,7 +404,7 @@ The two pre-computed monthly aggregates shipped with the source, `driver_monthly
 
 `log.usp_reconcile_baselines` rebuilds both aggregates from the facts, compares them with the baselines metric by metric, and appends one row per metric to `log.reconciliation_result`. The row set is every resource-month with a live trip, by dispatch month; both baselines match it exactly, with no month on only one side.
 
-**Verified metrics** fail the run on any mismatch, after every result has been recorded. Each reproduced the baseline exactly on all 4,464 driver-months and 3,312 truck-months, with its definition written before any result was seen:
+**Verified metrics** fail the run on any mismatch, after every result has been recorded. Each reproduced its baseline exactly on every row, all 4,464 driver-months or all 3,312 truck-months, with its definition written before any result was seen. Trips, miles and revenue are compared on both baselines, fuel gallons on drivers, and the three maintenance metrics on trucks: ten comparisons in all.
 
 | Metric | Definition |
 |---|---|
@@ -414,10 +422,12 @@ The revenue match confirms the fulfilling-resource rule from outside the project
 
 | Metric | Definition | Status |
 |---|---|---|
-| `average_idle_hours` | mean trip idle hours | compared at the one decimal the baseline stores |
-| `on_time_delivery_rate` | On Time share of Delivery events on the driver's trips | compared at the three decimals the baseline stores |
+| `average_idle_hours` | mean trip idle hours | matches 4,408 of 4,464 driver-months at the one decimal the baseline stores; every other month differs by exactly one unit in that decimal |
+| `on_time_delivery_rate` | On Time share of Delivery events on the driver's trips | matches 4,383 of 4,464 at the three decimals the baseline stores; every other month differs by exactly one unit in the last decimal |
 | `average_mpg` | total miles over total gallons | definition-unknown: the ratio does not reproduce it, consistent with the source's trip-level `average_mpg` being generated independently of miles and gallons |
 | `utilization_rate` | none derivable from the data | definition-unknown, not compared |
+
+The two near-misses keep their status under the exact-match rule; a one-unit difference in the last stored decimal is consistent with two tools rounding the same value differently, and changing the rounding until they agree would be fitting the answer.
 
 The baseline's stored precision was measured rather than assumed. The first comparison used the precision declared when the baselines were loaded, and every idle-hours and on-time mismatch was at most half of the baseline's last decimal place, the signature of comparing at the wrong precision rather than of a different definition.
 

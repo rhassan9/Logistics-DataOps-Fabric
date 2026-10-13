@@ -1,45 +1,52 @@
 # Logistics DataOps on Microsoft Fabric
 
-A medallion-architecture data platform on Microsoft Fabric, ingesting a logistics operations database from PostgreSQL and modelling it into a dimensional warehouse that reconciles exactly against an independent answer key.
+A medallion-architecture data platform on Microsoft Fabric: a PostgreSQL operations database ingested into a lakehouse, refined, and modelled into a Kimball star schema that reconciles exactly against an independent answer key.
 
 This is a migration of [Logistics-DataOps-Pipeline](https://github.com/rhassan9/Logistics-DataOps-Pipeline), a dbt and PostgreSQL warehouse, onto Fabric. Both versions are maintained so the two approaches can be compared directly.
+
+## At a glance
+
+- **541,930 source rows, 12 tables, three years** of fleet, shipment and safety data, landed append-only in bronze and refined to one row per business key in silver.
+- **6 facts, 8 dimensions, 4 junk dimensions** in a Fabric Data Warehouse, loaded incrementally from silver's Delta change feed by T-SQL procedures.
+- **Exact reconciliation against the dataset publisher's own monthly figures:** ten metric comparisons, four on all 4,464 driver-months and six on all 3,312 truck-months, match exactly and fail the run on any mismatch.
+- **Deletes handled end to end without losing history:** soft deletes from silver through every dimension and fact, behind a mass-deletion guard.
+- **Ten defects caught before release** by reconciliation, independent rebuilds and review, each fixed and listed [below](#defects-caught-before-release).
+
+The source is a static, synthetic Kaggle dataset. The incremental, deletion and Type 2 paths are exercised by controlled changes made in silver and gold during testing, not by live source activity.
 
 ---
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    SRC[("Neon PostgreSQL<br/>12 tables · 541,930 rows")]
+    BRZ["<b>Bronze</b> · lh_logistics_bronze<br/>raw Delta, append-only"]
+    SLV["<b>Silver</b> · lh_logistics_silver<br/>one row per key, current state,<br/>source deletions flagged"]
+    CD["Change detection<br/>Spark notebook reads<br/>silver's change feed"]
+    GLD["<b>Gold</b> · wh_logistics_gold<br/>Kimball star schema,<br/>T-SQL stored procedures"]
+    REC["Reconciliation against<br/>the publisher's baselines"]
+    SM["Direct Lake semantic model<br/>→ Power BI"]
+    OPS[("lh_logistics_ops<br/>profiling, baselines, run logs")]
+
+    SRC -->|"Spark notebook (JDBC) · Copy job"| BRZ
+    BRZ -->|"Spark notebook · Dataflow Gen2"| SLV
+    SLV --> CD
+    CD -->|"changed business keys"| GLD
+    SLV -->|"SQL analytics endpoint"| GLD
+    GLD --> REC
+    OPS -.-> REC
+    GLD --> SM
 ```
-Neon PostgreSQL (OLTP source)
-   12 tables · 541,930 rows · 2022-2024
-              │
-              │  Spark notebook (JDBC)  ·  Copy job
-              ▼
-   ┌──────────────────────────────┐
-   │  BRONZE   lh_logistics_bronze│   raw Delta, append-only
-   └──────────────────────────────┘
-              │  Spark notebook · Dataflow Gen2
-              ▼
-   ┌──────────────────────────────┐
-   │  SILVER   lh_logistics_silver│   one row per key, current state,
-   └──────────────────────────────┘   source deletions flagged
-              │  change detection (Spark, silver change feed)
-              │  T-SQL stored procedures
-              ▼
-   ┌──────────────────────────────┐
-   │  GOLD     wh_logistics_gold  │   Kimball star schema
-   └──────────────────────────────┘
-              │
-              ▼
-   Direct Lake semantic model → Power BI
-```
+
+| Layer | What it does | Detail |
+|---|---|---|
+| **Bronze** | Preserves source data exactly as it arrives, append-only, with row-level lineage. Built twice, as a Spark notebook and as a Copy job, and compared. | [docs/Bronze.md](docs/Bronze.md) |
+| **Silver** | One validated row for every business key the source has ever contained, carrying its current state. A key that disappears from the source is kept and flagged, and every row records when its state took effect. Those two columns are a contract with gold that does not depend on how changes are captured. | [docs/Silver.md](docs/Silver.md) |
+| **Gold** | Kimball star schema in a Fabric Data Warehouse. A Spark notebook reads silver's change feed and hands each fact exactly the keys it must rebuild; every fact load is gated, transactional and logged, and the model is reconciled on every run. | [docs/Gold.md](docs/Gold.md) |
+| **Requirements** | What gold must answer, and the questions this data cannot honestly support. | [docs/Business-Requirements.md](docs/Business-Requirements.md) |
 
 `lh_logistics_ops` sits outside the medallion flow. It holds profiling output, the validation baselines used to reconcile gold, and the bronze and silver run logs.
-
-**Bronze** preserves source data exactly as it arrives, append-only, with row-level lineage. Implemented twice, as a Spark notebook and as a Fabric Copy job, and compared. See [docs/Bronze.md](docs/Bronze.md).
-
-**Silver** holds one validated row for every business key the source has ever contained, carrying its current state. Rows are never physically deleted: a key that disappears from the source is kept with its last values and flagged, and every row records when its current state took effect at the source. Those two columns form a contract with gold that does not depend on how changes are captured upstream. Transactional tables are built with a Spark notebook, reference tables with Dataflow Gen2. See [docs/Silver.md](docs/Silver.md).
-
-**Gold** is a Kimball star schema in a Fabric Data Warehouse: six facts, eight dimensions and four junk dimensions, built with T-SQL stored procedures and served through a Direct Lake semantic model. A Spark notebook reads silver's change data feed and hands each fact exactly the business keys it must rebuild. Every load is gated, transactional and logged, and the whole model is reconciled each run against monthly aggregates published with the source. The analytical requirements, and the questions the data cannot support, are in [docs/Business Requirements.md](docs/Business%20Requirements.md). The bus matrix, grain statements, loading and reconciliation are in [docs/Gold.md](docs/Gold.md).
 
 ---
 
@@ -49,9 +56,9 @@ Neon PostgreSQL (OLTP source)
 
 **Deletes handled end to end without losing history.** Silver flags deletions instead of removing rows; gold carries the flag onto facts and dimensions as a soft delete. Every load stops if more than 10 percent of active rows would be deleted at once, the signature of a broken extract rather than a business event.
 
-**Loads that fail safely.** Each fact procedure checks that change detection covered every table it depends on, asserts one row per business key, publishes its rows and consumes its worklist in one transaction, and logs success only after commit. Detection refuses a reused run_id and first proves that the warehouse sees the same silver data as Spark.
+**Loads that fail safely.** Each fact procedure checks that change detection covered every table it depends on, asserts one row per business key, publishes its rows and consumes its worklist in one transaction, and logs success only after commit. Detection refuses a reused run_id and first checks that the warehouse sees the same silver data as Spark.
 
-**Correctness proven against an independent answer key.** Gold rebuilds the publisher's monthly driver and truck aggregates from its facts and matches seven metrics exactly on all 4,464 driver-months and 3,312 truck-months, including revenue attributed to the resource that delivered each load. A mismatch on any of them fails the run. Metrics that do not match are recorded as definition-unknown rather than tuned until they do.
+**Correctness checked against an independent answer key.** Gold rebuilds the publisher's monthly driver and truck aggregates from its facts. Ten metric comparisons match exactly, four on all 4,464 driver-months and six on all 3,312 truck-months, including revenue attributed to the resource that delivered each load. A mismatch on any of them fails the run. Metrics that do not match are reported rather than tuned until they do.
 
 **Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver.
 
@@ -65,10 +72,23 @@ Each was caught by reconciliation against a known number, by an independent rebu
 | Silver | `arrival_status` misclassified boundary events twice: an inclusive threshold, then classification on a rounded, second-truncated variance (59 events) |
 | Silver | Reading the earliest bronze version per key would have pinned silver to stale values after the first source update; the reference queries would have duplicated keys on the second bronze batch |
 | Silver | Dataflow Gen2 cannot write to Delta tables created by Fabric Runtime 2.0 defaults; reference tables are created at a protocol both writers support |
+| Silver | The Dataflow dated a key that returned to the source by its first appearance, where the notebook dates it by its return |
 | Gold | A change-detection run repeated under an already successful run_id advanced the checkpoint without the changes being loaded |
 | Gold | A trip or event moving to another load left the old load's lifecycle row stale |
 | Gold | Rebuilding a dimension left facts pointing at surrogate keys that no longer existed |
 | Gold | A load with no route was reported as a broken reference rather than a missing value |
+| Gold | Taking the highest consumed version as the checkpoint would skip changes after a silver table is recreated; the checkpoint is the most recent successful window |
+
+---
+
+## What changes at scale
+
+The dataset is about 125 MB. Most of the machinery here exists for correctness rather than volume: deletes, reprocessing after failure, idempotent reruns and reconciliation matter at any size. What would change with volume:
+
+- **Partitioning.** Microsoft advises leaving tables under 1 TB unpartitioned, so none are. Large fact and bronze tables past that size would be partitioned on their load date.
+- **Ingestion parallelism.** JDBC read partitioning is configured and benchmarked, and shows no gain at this size; it starts to pay once transfer time dominates connection setup.
+- **Change capture.** Snapshot-based deletion detection reads every bronze batch on a full run. At volume, change data capture at the source replaces it, which the silver contract allows without touching gold.
+- **Gold engine.** T-SQL procedures suit a warehouse serving Direct Lake at this size. Heavier transformation would be evaluated on Spark or materialized lake views against the same contract.
 
 ---
 
@@ -108,7 +128,7 @@ To reproduce it, see [Setting up the source](#setting-up-the-source).
 | Change detection | Delta change data feed, Spark connector for Fabric Data Warehouse, Semantic Link |
 | Warehouse | Fabric Data Warehouse, T-SQL |
 | Semantic layer | Direct Lake, DAX |
-| Configuration | Fabric Variable Library, Azure Key Vault |
+| Configuration | Fabric Variable Library; Azure Key Vault wired in code, provisioned with the Azure subscription in M4 |
 | Source control | Fabric Git integration, GitHub |
 
 ---
