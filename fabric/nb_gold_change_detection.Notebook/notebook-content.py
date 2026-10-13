@@ -59,8 +59,9 @@
 # ---------------------------------------------------------------------------
 # CELL 1: PARAMETERS
 # ---------------------------------------------------------------------------
-run_id = "manual-20261010-05b"
-steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident"  # comma-separated as more fact detectors are added
+run_id = "manual-20261011-L4C"
+# comma-separated as more fact detectors are added
+steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident,fact_load_lifecycle"
 full_scan_steps = ""  # comma-separated steps to force a full reconciliation
  
 # Full reconciliation is a safe fallback when CDF history is unavailable.
@@ -92,7 +93,12 @@ from pyspark.sql.types import (
 WAREHOUSE = "wh_logistics_gold"
 SILVER    = "lh_logistics_silver.dbo"
  
-CHANGE_TYPES = ["insert", "update_postimage", "delete"]
+# update_preimage carries the values a row had before an update. A detector
+# keyed on a parent (a load) needs it: when a trip or event moves to another
+# load, the postimage names only the new load and the old one would keep its
+# stale milestones. For detectors keyed on the row itself the preimage repeats
+# a key already present and is removed by distinct().
+CHANGE_TYPES = ["insert", "update_preimage", "update_postimage", "delete"]
  
 FORCED_FULL = {s.strip() for s in full_scan_steps.split(",") if s.strip()}
  
@@ -110,6 +116,23 @@ if not run_id:
  
 print(f"run_id={run_id}")
 print(f"steps={steps}")
+
+# A run_id names one detection and the gold load that consumes it. Reusing
+# one would attach new change windows to a run that may already have
+# succeeded. A failed procedure is retried with its own run_id; a new
+# detection always needs a new one.
+used = gold_query(f"""
+    SELECT COUNT(*) AS n
+    FROM (SELECT b.run_id FROM log.cdf_batch AS b WHERE b.run_id = '{run_id}'
+          UNION ALL
+          SELECT r.run_id FROM log.etl_run AS r WHERE r.run_id = '{run_id}') AS u
+""").first()["n"]
+ 
+if used:
+    raise ValueError(
+        f"run_id {run_id} has already been used. Every detection run needs a new run_id."
+    )
+ 
 
 # METADATA ********************
 
@@ -317,31 +340,33 @@ def heal_sql(fact, key, unknown_cols, scd2=(), orphans=()):
  
     unknown_cols  key columns where -1 means a lookup failed; retried on
                   active rows, because the dimension row may have arrived since.
-    scd2          (dimension, key column, business id, fact date column) for
-                  each Type 2 dimension: rows whose key is not the version
-                  valid at the fact's own date.
-    orphans       (dimension, key column) for every dimension key: rows whose
-                  key has no dimension row, left behind by a rebuild.
+    scd2          (dimension, key column, business id, fact date column
+                  [, fact key column]) for each Type 2 dimension: rows whose
+                  key is not the version valid at the fact's own date.
+    orphans       (dimension, key column [, fact key column]) for every
+                  dimension key: rows whose key has no dimension row, left
+                  behind by a rebuild.
     """
     parts = [f"""
         SELECT f.{key} FROM {fact} AS f
         WHERE f.is_deleted_in_source = 0
           AND -1 IN ({', '.join('f.' + c for c in unknown_cols)})"""]
  
-    for dim, dim_key, dim_id, date_col in scd2:
+    for dim, dim_key, dim_id, date_col, *fact_col in scd2:
+        col = fact_col[0] if fact_col else dim_key
         parts.append(f"""
         SELECT f.{key} FROM {fact} AS f
-        JOIN {dim} AS d ON d.{dim_key} = f.{dim_key}
+        JOIN {dim} AS d ON d.{dim_key} = f.{col}
         JOIN {dim} AS c
           ON c.{dim_id} = d.{dim_id}
          AND f.{date_col} >= c.valid_from_date_key
          AND f.{date_col} <  c.valid_to_date_key
-        WHERE f.{dim_key} > 0 AND c.{dim_key} <> f.{dim_key}""")
+        WHERE f.{col} > 0 AND c.{dim_key} <> f.{col}""")
  
     if orphans:
         missing = "\n           OR ".join(
-            f"NOT EXISTS (SELECT 1 FROM {dim} AS d WHERE d.{dim_key} = f.{dim_key})"
-            for dim, dim_key in orphans)
+            f"NOT EXISTS (SELECT 1 FROM {dim} AS d WHERE d.{dim_key} = f.{fact_col[0] if fact_col else dim_key})"
+            for dim, dim_key, *fact_col in orphans)
         parts.append(f"""
         SELECT f.{key} FROM {fact} AS f
         WHERE {missing}""")
@@ -575,6 +600,37 @@ def detect_fact_safety_incident(step):
                           ("dim.dim_incident_class", "incident_class_key")]))
  
  
+# fact_load_lifecycle: the load, any of its trips, or any of its events. The
+# trip and event change rows carry load_id, including the preimage of a row
+# that moved away from a load.
+def detect_fact_load_lifecycle(step):
+    def incremental(ch):
+        return (ch["silver_loads"].select("load_id")
+                .unionByName(ch["silver_trips"].select("load_id"))
+                .unionByName(ch["silver_delivery_events"].select("load_id")))
+ 
+    fact = "fact.fact_load_lifecycle"
+    return detect_fact(
+        step, "load_id", fact, "silver_loads",
+        ["silver_loads", "silver_trips", "silver_delivery_events"], incremental,
+        heal_sql(fact, "load_id",
+                 unknown_cols=["booked_date_key", "dispatched_date_key", "pickup_date_key",
+                               "delivery_date_key", "customer_key", "route_key", "load_type_key",
+                               "fulfilling_driver_key", "fulfilling_truck_key",
+                               "fulfilling_trailer_key"],
+                 scd2=[("dim.dim_driver", "driver_key", "driver_id", "dispatched_date_key",
+                        "fulfilling_driver_key"),
+                       ("dim.dim_truck", "truck_key", "truck_id", "dispatched_date_key",
+                        "fulfilling_truck_key")],
+                 orphans=[("dim.dim_customer", "customer_key"),
+                          ("dim.dim_route", "route_key"),
+                          ("dim.dim_load_type", "load_type_key"),
+                          ("dim.dim_driver", "driver_key", "fulfilling_driver_key"),
+                          ("dim.dim_truck", "truck_key", "fulfilling_truck_key"),
+                          ("dim.dim_trailer", "trailer_key", "fulfilling_trailer_key")]))
+
+
+
 # Step name -> detector, worklist table, key column.
 STEPS = {
     "fact_trip":            {"detect": detect_fact_trip,            "stg": "stg.changed_trip_keys",            "key": "trip_id"},
@@ -582,6 +638,7 @@ STEPS = {
     "fact_fuel_purchase":   {"detect": detect_fact_fuel_purchase,   "stg": "stg.changed_fuel_purchase_keys",   "key": "fuel_purchase_id"},
     "fact_maintenance":     {"detect": detect_fact_maintenance,     "stg": "stg.changed_maintenance_keys",     "key": "maintenance_id"},
     "fact_safety_incident": {"detect": detect_fact_safety_incident, "stg": "stg.changed_safety_incident_keys", "key": "incident_id"},
+    "fact_load_lifecycle":  {"detect": detect_fact_load_lifecycle,  "stg": "stg.changed_load_keys",            "key": "load_id"},
 }
 
 # METADATA ********************
@@ -679,26 +736,6 @@ print(
     "checkpoint is not trusted until its procedure logs 'succeeded'."
 )
  
-
-# METADATA ********************
-
-# META {
-# META   "language": "python",
-# META   "language_group": "synapse_pyspark"
-# META }
-
-# CELL ********************
-
-for table, key in [("delivery_events", "event_id"), ("fuel_purchases", "fuel_purchase_id"),
-                   ("maintenance_records", "maintenance_id"), ("safety_incidents", "incident_id")]:
-    t = f"lh_logistics_silver.dbo.silver_{table}"
-    spark.sql(f"""SELECT '{table}' AS tbl, {key}, _is_deleted_in_source, _source_changed_at,
-                         _silver_updated_at, _silver_run_id
-                  FROM {t} WHERE _is_deleted_in_source OR _is_deleted_in_source IS NULL""").show(truncate=False)
-    (spark.sql(f"DESCRIBE HISTORY {t}")
-          .selectExpr("version", "timestamp", "operation",
-                      "operationMetrics['numTargetRowsUpdated'] AS updated")
-          .show(6, truncate=False))
 
 # METADATA ********************
 
