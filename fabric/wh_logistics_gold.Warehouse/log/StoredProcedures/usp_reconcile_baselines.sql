@@ -259,6 +259,10 @@ BEGIN
  
         SELECT @compared = COUNT(*) FROM #pairs AS p WHERE p.in_baseline = 1 AND p.in_gold = 1;
  
+        /* One attempt's results commit together, so a retried run never leaves a
+           partial attempt behind. log.vw_reconciliation_latest reads the newest one. */
+        BEGIN TRANSACTION;
+ 
         /* A metric passes only with every row present on both sides and equal. */
         INSERT INTO log.reconciliation_result
             (run_id, checked_at, baseline_name, metric_name, is_verified, rows_compared,
@@ -291,6 +295,8 @@ BEGIN
         VALUES (@run_id, @checked_at, 'truck_utilization_metrics', 'utilization_rate', 0,
                 NULL, NULL, NULL, NULL, NULL, 'definition-unknown');
  
+        COMMIT TRANSACTION;
+ 
         SELECT @failed  = SUM(CASE WHEN r.status = 'fail' THEN 1 ELSE 0 END),
                @unknown = SUM(CASE WHEN r.status = 'definition-unknown' THEN 1 ELSE 0 END)
         FROM log.reconciliation_result AS r
@@ -321,6 +327,7 @@ BEGIN
         DROP TABLE IF EXISTS #trip;
     END TRY
     BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
         SET @msg = LEFT(ERROR_MESSAGE(), 4000);
         EXEC log.usp_write_run_event @run_id, @step, @source, 'failed',
              NULL, NULL, NULL, NULL, NULL, @msg;

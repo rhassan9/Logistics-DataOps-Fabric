@@ -59,10 +59,11 @@
 # ---------------------------------------------------------------------------
 # CELL 1: PARAMETERS
 # ---------------------------------------------------------------------------
-run_id = ""
+run_id = "test-g2-c"
 # comma-separated as more fact detectors are added
-steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident,fact_load_lifecycle"
-full_scan_steps = ""  # comma-separated steps to force a full reconciliation
+#steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident,fact_load_lifecycle"
+steps = "fact_trip"
+full_scan_steps = "fact_trip"  # comma-separated steps to force a full reconciliation
  
 # Full reconciliation is a safe fallback when CDF history is unavailable.
 # Set False in a development session when you want CDF failures to stop the run
@@ -117,21 +118,35 @@ if not run_id:
 print(f"run_id={run_id}")
 print(f"steps={steps}")
 
-# A run_id names one detection and the gold load that consumes it. Reusing
-# one would attach new change windows to a run that may already have
-# succeeded. A failed procedure is retried with its own run_id; a new
-# detection always needs a new one.
-used = gold_query(f"""
+# A run_id names one logical run, passed down from the pipeline. Detection may
+# repeat under it until a fact procedure has acted on it: that is a pipeline
+# retry after an interrupted detection, and the repeat is safe because the
+# procedures read their worklist with DISTINCT and the checkpoint takes the
+# newest window. Once a fact procedure has logged against the run_id, a new
+# detection needs a new run_id.
+FACT_STEPS = ["fact_trip", "fact_delivery_event", "fact_fuel_purchase",
+              "fact_maintenance", "fact_safety_incident", "fact_load_lifecycle"]
+fact_step_list = ", ".join(f"'{s}'" for s in FACT_STEPS)
+ 
+consumed = gold_query(f"""
     SELECT COUNT(*) AS n
-    FROM (SELECT b.run_id FROM log.cdf_batch AS b WHERE b.run_id = '{run_id}'
-          UNION ALL
-          SELECT r.run_id FROM log.etl_run AS r WHERE r.run_id = '{run_id}') AS u
+    FROM log.etl_run AS r
+    WHERE r.run_id = '{run_id}' AND r.step_name IN ({fact_step_list})
 """).first()["n"]
  
-if used:
+if consumed:
     raise ValueError(
-        f"run_id {run_id} has already been used. Every detection run needs a new run_id."
+        f"run_id {run_id} has already been used by a fact procedure. "
+        "A new detection needs a new run_id."
     )
+ 
+earlier_windows = gold_query(f"""
+    SELECT COUNT(*) AS n FROM log.cdf_batch AS b WHERE b.run_id = '{run_id}'
+""").first()["n"]
+ 
+if earlier_windows:
+    print(f"run_id {run_id}: repeating a detection no fact procedure has used; "
+          f"{earlier_windows} earlier window(s) are superseded by this one.")
  
 
 # METADATA ********************

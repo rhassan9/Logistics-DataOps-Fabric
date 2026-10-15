@@ -121,9 +121,14 @@ let
             Sorted   = Table.Buffer(Table.Sort(rows, {{"_ingested_at", Order.Ascending}})),
             Versions = Table.ToRecords(Table.SelectColumns(Sorted, Business)),
             Seen     = Sorted[_ingested_at],
-            Current  = List.Last(Versions),
-            Differs  = List.Select(List.Positions(Versions), each Versions{_} <> Current),
-            RunStart = if List.IsEmpty(Differs) then 0 else List.Last(Differs) + 1,
+            // A version run starts at the first appearance, at a change of
+            // values, or after a snapshot the key was missing from.
+            Breaks   = List.Select(List.Positions(Versions), (i) =>
+                           i = 0
+                           or Versions{i} <> Versions{i - 1}
+                           or List.MatchesAny(Snapshots,
+                                  (s) => s > Seen{i - 1} and s < Seen{i})),
+            RunStart = List.Last(Breaks),
             LastSeen = List.Last(Seen),
             Deleted  = LastSeen < Latest
         in
