@@ -226,7 +226,7 @@
       {
         "type": "SqlServerStoredProcedure",
         "typeProperties": {
-          "storedProcedureName": "[fact].[usp_load_fact_delivery_event]",
+          "storedProcedureName": "[fact].[usp_load_fact_fuel_purchase]",
           "storedProcedureParameters": {
             "allow_mass_delete": {
               "value": "false",
@@ -455,37 +455,7 @@
         "name": "Reconcile_Baselines",
         "dependsOn": [
           {
-            "activity": "Load_fact_trip",
-            "dependencyConditions": [
-              "Succeeded"
-            ]
-          },
-          {
-            "activity": "Load_fact_delivery_event",
-            "dependencyConditions": [
-              "Succeeded"
-            ]
-          },
-          {
-            "activity": "Load_fact_fuel_purchase",
-            "dependencyConditions": [
-              "Succeeded"
-            ]
-          },
-          {
-            "activity": "Load_fact_maintenance",
-            "dependencyConditions": [
-              "Succeeded"
-            ]
-          },
-          {
-            "activity": "Load_fact_safety_incident",
-            "dependencyConditions": [
-              "Succeeded"
-            ]
-          },
-          {
-            "activity": "Load_fact_load_lifecycle",
+            "activity": "Assert_Run_Complete",
             "dependencyConditions": [
               "Succeeded"
             ]
@@ -533,6 +503,79 @@
         "dependsOn": [
           {
             "activity": "Reconcile_Baselines",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[log].[usp_assert_gold_run_complete]",
+          "storedProcedureParameters": {
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "name": "Assert_Run_Complete",
+        "dependsOn": [
+          {
+            "activity": "Load_fact_trip",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_delivery_event",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_fuel_purchase",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_maintenance",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_safety_incident",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_load_lifecycle",
             "dependencyConditions": [
               "Succeeded"
             ]
