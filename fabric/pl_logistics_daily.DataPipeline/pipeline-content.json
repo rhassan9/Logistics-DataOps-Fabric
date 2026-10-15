@@ -1,0 +1,113 @@
+{
+  "properties": {
+    "activities": [
+      {
+        "type": "InvokePipeline",
+        "typeProperties": {
+          "parameters": {
+            "run_id": {
+              "value": "@concat('pl-', pipeline().RunId)",
+              "type": "Expression"
+            }
+          },
+          "waitOnCompletion": true,
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "pipelineId": "ae9c9b3d-1cb8-ba3b-4493-ee6123d5608e",
+          "operationType": "InvokeFabricPipeline"
+        },
+        "externalReferences": {
+          "connection": "aac81f69-87e3-488f-ac88-b68769b2eb67"
+        },
+        "policy": {
+          "timeout": "0.03:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "name": "Invoke_pl_gold_load",
+        "dependsOn": []
+      },
+      {
+        "type": "SetVariable",
+        "typeProperties": {
+          "variableName": "v_error",
+          "value": {
+            "value": "@uriComponentToString(replace(replace(replace(replace(replace(uriComponent(coalesce(activity('Invoke_pl_gold_load')?.error?.message, 'No error message returned')), '%22', '%27'), '%5C', '%2F'), '%0A', '%20'), '%0D', '%20'), '%09', '%20'))",
+            "type": "Expression"
+          }
+        },
+        "policy": {
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "name": "Set_Error_Text",
+        "dependsOn": [
+          {
+            "activity": "Invoke_pl_gold_load",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "WebActivity",
+        "typeProperties": {
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "value": "@concat('{\"text\":\"', ':rotating_light: *Fabric pipeline failed*\\n*Pipeline:* ', pipeline().PipelineName, '\\n*Parent run ID:* ', pipeline().RunId, '\\n*Child run ID:* ', coalesce(activity('Invoke_pl_gold_load')?.output?.pipelineRunId, 'not started'), '\\n*Gold run_id:* pl-', pipeline().RunId, '\\n*Trigger:* ', pipeline().TriggerType, ' at ', pipeline().TriggerTime, '\\n*Error:* ', if(greater(length(variables('v_error')), 1500), concat(substring(variables('v_error'), 0, 1500), '...'), variables('v_error')), '\\n*Open:* <https://app.fabric.microsoft.com/workloads/data-pipeline/monitoring/workspaces/', pipeline().DataFactory, '/pipelines/', pipeline().Pipeline, '/', pipeline().RunId, '|parent run in Fabric monitoring>', '\"}')",
+            "type": "Expression"
+          }
+        },
+        "externalReferences": {
+          "connection": "9753e7ea-987f-4287-b1ed-2e4628f71e90"
+        },
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "name": "Post_Slack_Failure",
+        "dependsOn": [
+          {
+            "activity": "Set_Error_Text",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Fail",
+        "typeProperties": {
+          "message": {
+            "value": "@concat('pl_gold_load failed. Alert sent. ', variables('v_error'))",
+            "type": "Expression"
+          },
+          "errorCode": "GOLD_LOAD_FAILED"
+        },
+        "name": "Fail_Pipeline",
+        "dependsOn": [
+          {
+            "activity": "Post_Slack_Failure",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ]
+      }
+    ],
+    "variables": {
+      "v_error": {
+        "type": "String"
+      }
+    },
+    "concurrency": 1
+  }
+}

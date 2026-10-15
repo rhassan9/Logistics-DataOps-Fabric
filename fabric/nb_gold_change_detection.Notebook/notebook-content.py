@@ -59,11 +59,11 @@
 # ---------------------------------------------------------------------------
 # CELL 1: PARAMETERS
 # ---------------------------------------------------------------------------
-run_id = "test-g2-c"
+run_id = "test-sync"
 # comma-separated as more fact detectors are added
-#steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident,fact_load_lifecycle"
-steps = "fact_trip"
-full_scan_steps = "fact_trip"  # comma-separated steps to force a full reconciliation
+steps = "fact_trip,fact_delivery_event,fact_fuel_purchase,fact_maintenance,fact_safety_incident,fact_load_lifecycle"
+#steps = "fact_trip"
+full_scan_steps = ""  # comma-separated steps to force a full reconciliation
  
 # Full reconciliation is a safe fallback when CDF history is unavailable.
 # Set False in a development session when you want CDF failures to stop the run
@@ -158,76 +158,7 @@ if earlier_windows:
 
 # CELL ********************
 
-# ---------------------------------------------------------------------------
-# CELL 2B: SILVER SQL ENDPOINT SYNC
-# ---------------------------------------------------------------------------
-# Change detection reads silver through Spark, straight from Delta. The gold
-# procedures read the same tables through the lakehouse SQL analytics
-# endpoint, whose metadata syncs in the background and can lag. This cell
-# forces the sync, then proves Spark and the endpoint see the same silver
-# before any checkpoint can advance.
-import sempy
-try:
-    from sempy.fabric.sql_endpoint import refresh_sql_endpoint_metadata
-except ImportError as exc:
-    raise RuntimeError(
-        f"semantic-link-sempy {sempy.__version__} has no sql_endpoint module; 0.13.0 or later is required."
-    ) from exc
-
-SILVER_LAKEHOUSE = "lh_logistics_silver"
-SILVER_TABLES = [
-    "silver_customers", "silver_drivers", "silver_trucks", "silver_trailers",
-    "silver_routes", "silver_facilities", "silver_loads", "silver_trips",
-    "silver_delivery_events", "silver_fuel_purchases",
-    "silver_maintenance_records", "silver_safety_incidents",
-]
-
-sync = refresh_sql_endpoint_metadata(
-    warehouse=SILVER_LAKEHOUSE, warehouse_type="Lakehouse"
-)
-display(sync)
-if (sync["Status"] == "Failure").any():
-    raise RuntimeError("Silver SQL endpoint sync reported a failed table; gold not loaded.")
-
-# Same fingerprint on both sides: rows, deleted rows, latest change in epoch
-# microseconds (timezone-neutral on both engines).
-spark_fp = {
-    t: tuple(
-        spark.table(f"{SILVER}.{t}")
-        .selectExpr(
-            "COUNT(*)",
-            "SUM(CAST(_is_deleted_in_source AS BIGINT))",
-            "unix_micros(MAX(_source_changed_at))",
-        )
-        .first()
-    )
-    for t in SILVER_TABLES
-}
-
-endpoint_sql = "\nUNION ALL\n".join(
-    f"""SELECT '{t}' AS table_name,
-       COUNT_BIG(*) AS row_count,
-       CAST(SUM(CASE WHEN _is_deleted_in_source = 1 THEN 1 ELSE 0 END) AS BIGINT) AS deleted_count,
-       DATEDIFF_BIG(microsecond, '1970-01-01', MAX(_source_changed_at)) AS max_changed_us
-FROM {SILVER_LAKEHOUSE}.dbo.{t}"""
-    for t in SILVER_TABLES
-)
-endpoint_fp = {
-    r["table_name"]: (r["row_count"], r["deleted_count"], r["max_changed_us"])
-    for r in gold_query(endpoint_sql).collect()
-}
-
-stale = [
-    f"{t}: spark={spark_fp[t]} endpoint={endpoint_fp.get(t)}"
-    for t in SILVER_TABLES
-    if spark_fp[t] != endpoint_fp.get(t)
-]
-if stale:
-    raise RuntimeError(
-        "SQL endpoint does not match silver Delta (rows, deleted, max_changed_us):\n"
-        + "\n".join(stale)
-    )
-print(f"Silver SQL endpoint in sync for {len(SILVER_TABLES)} tables.")
+%run nb_silver_endpoint_sync
 
 # METADATA ********************
 

@@ -1,0 +1,555 @@
+{
+  "properties": {
+    "activities": [
+      {
+        "type": "SetVariable",
+        "typeProperties": {
+          "variableName": "v_run_id",
+          "value": {
+            "value": "@if(empty(pipeline().parameters.run_id), concat('pl-', pipeline().RunId), pipeline().parameters.run_id)",
+            "type": "Expression"
+          }
+        },
+        "policy": {
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "name": "Set_Run_Id",
+        "dependsOn": []
+      },
+      {
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "2c30c519-b295-81ab-46a1-53fd68129b66",
+          "workspaceId": "00000000-0000-0000-0000-000000000000"
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 60,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Sync_Silver_Endpoint",
+        "dependsOn": [
+          {
+            "activity": "Set_Run_Id",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[dim].[usp_load_dimensions]",
+          "storedProcedureParameters": {
+            "allow_mass_delete": {
+              "value": "false",
+              "type": "Boolean"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Load_Dimensions",
+        "dependsOn": [
+          {
+            "activity": "Sync_Silver_Endpoint",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "aa0ccf77-294a-9736-4d96-63fe183fbd6b",
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "parameters": {
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        },
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 60,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Detect_Changes",
+        "dependsOn": [
+          {
+            "activity": "Load_Dimensions",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[fact].[usp_load_fact_trip]",
+          "storedProcedureParameters": {
+            "allow_mass_delete": {
+              "value": "false",
+              "type": "Boolean"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Load_fact_trip",
+        "dependsOn": [
+          {
+            "activity": "Detect_Changes",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[fact].[usp_load_fact_delivery_event]",
+          "storedProcedureParameters": {
+            "allow_mass_delete": {
+              "value": "false",
+              "type": "Boolean"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Load_fact_delivery_event",
+        "dependsOn": [
+          {
+            "activity": "Detect_Changes",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[fact].[usp_load_fact_delivery_event]",
+          "storedProcedureParameters": {
+            "allow_mass_delete": {
+              "value": "false",
+              "type": "Boolean"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Load_fact_fuel_purchase",
+        "dependsOn": [
+          {
+            "activity": "Detect_Changes",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[fact].[usp_load_fact_maintenance]",
+          "storedProcedureParameters": {
+            "allow_mass_delete": {
+              "value": "false",
+              "type": "Boolean"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Load_fact_maintenance",
+        "dependsOn": [
+          {
+            "activity": "Detect_Changes",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[fact].[usp_load_fact_safety_incident]",
+          "storedProcedureParameters": {
+            "allow_mass_delete": {
+              "value": "false",
+              "type": "Boolean"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Load_fact_safety_incident",
+        "dependsOn": [
+          {
+            "activity": "Detect_Changes",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[fact].[usp_load_fact_load_lifecycle]",
+          "storedProcedureParameters": {
+            "allow_mass_delete": {
+              "value": "false",
+              "type": "Boolean"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false,
+          "exponentialRetry": true,
+          "maxRetryIntervalInSeconds": 300
+        },
+        "name": "Load_fact_load_lifecycle",
+        "dependsOn": [
+          {
+            "activity": "Detect_Changes",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[log].[usp_reconcile_baselines]",
+          "storedProcedureParameters": {
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 60,
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "name": "Reconcile_Baselines",
+        "dependsOn": [
+          {
+            "activity": "Load_fact_trip",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_delivery_event",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_fuel_purchase",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_maintenance",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_safety_incident",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Load_fact_load_lifecycle",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "SqlServerStoredProcedure",
+        "typeProperties": {
+          "storedProcedureName": "[stg].[usp_purge_orphan_keys]",
+          "storedProcedureParameters": {
+            "older_than_hours": {
+              "value": "24",
+              "type": "Int32"
+            },
+            "run_id": {
+              "value": {
+                "value": "@variables('v_run_id')",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedService": {
+          "name": "wh_logistics_gold",
+          "properties": {
+            "type": "DataWarehouse",
+            "typeProperties": {
+              "artifactId": "56d7a987-07bd-8948-4154-97e0f74f5cc3",
+              "endpoint": "bn6ct56ochxu5fga5tts57yx5q-4ryxbjzkxv4utciqsho3rtjkbe.datawarehouse.fabric.microsoft.com",
+              "workspaceId": "00000000-0000-0000-0000-000000000000"
+            },
+            "annotations": []
+          }
+        },
+        "policy": {
+          "timeout": "0.00:15:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 60,
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "name": "Purge_Worklists",
+        "dependsOn": [
+          {
+            "activity": "Reconcile_Baselines",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "run_id": {
+        "type": "string"
+      }
+    },
+    "variables": {
+      "v_run_id": {
+        "type": "String"
+      }
+    },
+    "concurrency": 1
+  }
+}
