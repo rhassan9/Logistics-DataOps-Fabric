@@ -356,7 +356,7 @@ Each procedure follows the same sequence:
 | `log.cdf_batch` | the version window each run read, per fact and source table |
 | `log.vw_unfinished_runs` | detections no successful load has followed |
 | `log.vw_reconciliation_latest` | the newest reconciliation attempt for each run |
-| `dim.usp_load_dimensions` | loads the six SCD2 and five junk dimensions under the run_id, naming the dimension that failed |
+| `dim.usp_load_dimensions` | loads the six reference dimensions, the four junk dimensions and `dim_location` under the run_id, naming the dimension that failed |
 | `log.usp_assert_gold_run_complete` | fails the run unless the dimensions and all six facts logged success under the run_id |
 | `stg.usp_purge_orphan_keys` | removes worklist rows at least 24 hours old once a later run of the same step has made them redundant |
 
@@ -493,16 +493,16 @@ The two pre-computed monthly aggregates shipped with the source, `driver_monthly
 
 The revenue match confirms the fulfilling-resource rule from outside the project: revenue lands on the same driver and truck, in the same month, as the publisher's own calculation, on every row.
 
-**Unverified metrics** are reported on every run and never fail it. Each keeps the one definition stated in advance; none is varied until it matches, which would be fitting the answer rather than reproducing it.
+**Unverified metrics** are reported on every run and never fail it. Each keeps the one definition stated in advance; none is varied until it matches, which would be fitting the answer rather than reproducing it. An unverified metric is logged `match` when every row agrees, `mismatch` when its stated definition misses some rows, and `definition-unknown` when no stated definition reproduces the baseline.
 
 | Metric | Definition | Status |
 |---|---|---|
-| `average_idle_hours` | mean trip idle hours | matches 4,408 of 4,464 driver-months at the one decimal the baseline stores; every other month differs by exactly one unit in that decimal |
-| `on_time_delivery_rate` | On Time share of Delivery events on the driver's trips | matches 4,383 of 4,464 at the three decimals the baseline stores; every other month differs by exactly one unit in the last decimal |
-| `average_mpg` | total miles over total gallons | definition-unknown: the ratio does not reproduce it, consistent with the source's trip-level `average_mpg` being generated independently of miles and gallons |
-| `utilization_rate` | none derivable from the data | definition-unknown, not compared |
+| `average_idle_hours` | mean trip idle hours | `mismatch`: matches 4,408 of 4,464 driver-months at the one decimal the baseline stores; every other month differs by exactly one unit in that decimal |
+| `on_time_delivery_rate` | On Time share of Delivery events on the driver's trips | `mismatch`: matches 4,383 of 4,464 at the three decimals the baseline stores; every other month differs by exactly one unit in the last decimal |
+| `average_mpg` | total miles over total gallons | `definition-unknown` on both baselines: the ratio does not reproduce it, consistent with the source's trip-level `average_mpg` being generated independently of miles and gallons |
+| `utilization_rate` | none derivable from the data | `definition-unknown`, not compared |
 
-The two near-misses keep their status under the exact-match rule; a one-unit difference in the last stored decimal is consistent with two tools rounding the same value differently, and changing the rounding until they agree would be fitting the answer.
+The two near-misses stay `mismatch` under the exact-match rule; a one-unit difference in the last stored decimal is consistent with two tools rounding the same value differently, and changing the rounding until they agree would be fitting the answer.
 
 The baseline's stored precision was measured rather than assumed. The first comparison used the precision declared when the baselines were loaded, and every idle-hours and on-time mismatch was at most half of the baseline's last decimal place, the signature of comparing at the wrong precision rather than of a different definition.
 
