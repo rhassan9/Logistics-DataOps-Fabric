@@ -40,7 +40,7 @@ BEGIN
         EXEC dim.usp_load_dim_location;
  
         EXEC log.usp_write_run_event @run_id, @step, NULL, 'succeeded',
-             NULL, NULL, NULL, NULL, NULL, 'six SCD2 and five junk dimensions loaded';
+             NULL, NULL, NULL, NULL, NULL, 'six reference dimensions, four junk dimensions and dim_location loaded';
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;

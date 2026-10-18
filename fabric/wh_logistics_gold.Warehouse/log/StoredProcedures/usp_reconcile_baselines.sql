@@ -11,6 +11,7 @@ BEGIN
         @compared   BIGINT = 0,
         @failed     INT = 0,
         @unknown    INT = 0,
+        @mismatch   INT = 0,
         @msg        VARCHAR(4000);
  
     IF @run_id IS NULL
@@ -271,7 +272,12 @@ BEGIN
                s.rows_compared, s.rows_matched, s.baseline_only, s.gold_only, s.max_abs_difference,
                CASE WHEN s.rows_compared = s.rows_matched AND s.baseline_only = 0 AND s.gold_only = 0
                     THEN CASE WHEN s.is_verified = 1 THEN 'pass' ELSE 'match' END
-                    ELSE CASE WHEN s.is_verified = 1 THEN 'fail' ELSE 'definition-unknown' END
+                    /* An unverified metric with a stated definition that does not reproduce
+                       every row is a mismatch: reported, never failing. A definition is
+                       unknown only where no stated definition reproduces the baseline. */
+                    ELSE CASE WHEN s.is_verified = 1 THEN 'fail'
+                              WHEN s.metric_name = 'average_mpg' THEN 'definition-unknown'
+                              ELSE 'mismatch' END
                END
         FROM
         (
@@ -298,7 +304,8 @@ BEGIN
         COMMIT TRANSACTION;
  
         SELECT @failed  = SUM(CASE WHEN r.status = 'fail' THEN 1 ELSE 0 END),
-               @unknown = SUM(CASE WHEN r.status = 'definition-unknown' THEN 1 ELSE 0 END)
+               @unknown = SUM(CASE WHEN r.status = 'definition-unknown' THEN 1 ELSE 0 END),
+               @mismatch = SUM(CASE WHEN r.status = 'mismatch' THEN 1 ELSE 0 END)
         FROM log.reconciliation_result AS r
         WHERE r.run_id = @run_id AND r.checked_at = @checked_at;
  
@@ -313,6 +320,7 @@ BEGIN
         END;
  
         SET @msg = 'baselines reconciled; verified metrics pass; '
+                 + CAST(@mismatch AS VARCHAR(10)) + ' unverified metrics mismatch; '
                  + CAST(@unknown AS VARCHAR(10)) + ' metrics definition-unknown';
  
         EXEC log.usp_write_run_event @run_id, @step, @source, 'succeeded',
