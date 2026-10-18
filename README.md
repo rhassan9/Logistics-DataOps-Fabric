@@ -10,7 +10,8 @@ This is a migration of [Logistics-DataOps-Pipeline](https://github.com/rhassan9/
 - **6 facts, 8 dimensions, 4 junk dimensions** in a Fabric Data Warehouse, loaded incrementally from silver's Delta change feed by T-SQL procedures.
 - **Exact reconciliation against the dataset publisher's own monthly figures:** ten metric comparisons, four on all 4,464 driver-months and six on all 3,312 truck-months, match exactly and fail the run on any mismatch.
 - **Deletes handled end to end without losing history:** soft deletes from silver through every dimension and fact, behind a mass-deletion guard.
-- **Ten defects caught before release** by reconciliation, independent rebuilds and review, each fixed and listed [below](#defects-caught-before-release).
+- **One scheduled pipeline for the whole gold load**, every step safe to retry, failures posted to Slack, and recovery after a mid-run failure proven by breaking the real pipeline on purpose.
+- **Eleven defects caught before release** by reconciliation, independent rebuilds, failure testing and review, each fixed and listed [below](#defects-caught-before-release).
 
 The source is a static, synthetic Kaggle dataset. The incremental, deletion and Type 2 paths are exercised by controlled changes made in silver and gold during testing, not by live source activity.
 
@@ -26,6 +27,7 @@ flowchart TD
     CD["Change detection<br/>Spark notebook reads<br/>silver's change feed"]
     GLD["<b>Gold</b> · wh_logistics_gold<br/>Kimball star schema,<br/>T-SQL stored procedures"]
     REC["Reconciliation against<br/>the publisher's baselines"]
+    PL["<b>Orchestration</b><br/>pl_logistics_daily → pl_gold_load<br/>schedule · retries · Slack alerts"]
     SM["Direct Lake semantic model<br/>→ Power BI"]
     OPS[("lh_logistics_ops<br/>profiling, baselines, run logs")]
 
@@ -37,6 +39,8 @@ flowchart TD
     GLD --> REC
     OPS -.-> REC
     GLD --> SM
+    PL -.->|"runs"| CD
+    PL -.->|"runs"| GLD
 ```
 
 | Layer | What it does | Detail |
@@ -44,6 +48,7 @@ flowchart TD
 | **Bronze** | Preserves source data exactly as it arrives, append-only, with row-level lineage. Built twice, as a Spark notebook and as a Copy job, and compared. | [docs/Bronze.md](docs/Bronze.md) |
 | **Silver** | One validated row for every business key the source has ever contained, carrying its current state. A key that disappears from the source is kept and flagged, and every row records when its state took effect. Those two columns are a contract with gold that does not depend on how changes are captured. | [docs/Silver.md](docs/Silver.md) |
 | **Gold** | Kimball star schema in a Fabric Data Warehouse. A Spark notebook reads silver's change feed and hands each fact exactly the keys it must rebuild; every fact load is gated, transactional and logged, and the model is reconciled on every run. | [docs/Gold.md](docs/Gold.md) |
+| **Orchestration** | `pl_gold_load` runs endpoint sync, dimensions, change detection, the six facts in parallel, a completeness check, reconciliation and cleanup under one run_id. `pl_logistics_daily` schedules it and posts failures to Slack. | [docs/Gold.md](docs/Gold.md#orchestration) |
 | **Requirements** | What gold must answer, and the questions this data cannot honestly support. | [docs/Business-Requirements.md](docs/Business-Requirements.md) |
 
 `lh_logistics_ops` sits outside the medallion flow. It holds profiling output, the validation baselines used to reconcile gold, and the bronze and silver run logs.
@@ -56,11 +61,13 @@ flowchart TD
 
 **Deletes handled end to end without losing history.** Silver flags deletions instead of removing rows; gold carries the flag onto facts and dimensions as a soft delete. Every load stops if more than 10 percent of active rows would be deleted at once, the signature of a broken extract rather than a business event.
 
-**Loads that fail safely.** Each fact procedure checks that change detection covered every table it depends on, asserts one row per business key, publishes its rows and consumes its worklist in one transaction, and logs success only after commit. Detection refuses a reused run_id and first checks that the warehouse sees the same silver data as Spark.
+**Loads that fail safely.** Each fact procedure checks that change detection covered every table it depends on, asserts one row per business key, publishes its rows and consumes its worklist in one transaction, and logs success only after commit. Detection refuses a run_id a fact has already used, and the pipeline first checks that the warehouse sees the same silver data as Spark.
+
+**Recovery proven, not assumed.** A fact that fails after change detection keeps its worklist and its checkpoint, while the other facts commit. The acceptance tests broke a fact procedure inside the real pipeline and recovered it both ways: rerunning that one procedure, and starting a fresh run that re-reads what the failed run never consumed. A completeness check fails any run that skips a step, added after a copied pipeline activity loaded one fact twice and another not at all while the run reported success.
 
 **Correctness checked against an independent answer key.** Gold rebuilds the publisher's monthly driver and truck aggregates from its facts. Ten metric comparisons match exactly, four on all 4,464 driver-months and six on all 3,312 truck-months, including revenue attributed to the resource that delivered each load. A mismatch on any of them fails the run. Metrics that do not match are reported rather than tuned until they do.
 
-**Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver.
+**Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver. The orchestration was then tested by failure: a cancelled detection, a broken fact, a broken dimension step and overlapping runs.
 
 ### Defects caught before release
 
@@ -78,6 +85,7 @@ Each was caught by reconciliation against a known number, by an independent rebu
 | Gold | Rebuilding a dimension left facts pointing at surrogate keys that no longer existed |
 | Gold | A load with no route was reported as a broken reference rather than a missing value |
 | Gold | Taking the highest consumed version as the checkpoint would skip changes after a silver table is recreated; the checkpoint is the most recent successful window |
+| Orchestration | A copied pipeline activity kept its procedure name, so one fact loaded twice and another never loaded while the run reported success; a completeness check now fails any run missing a step |
 
 ---
 
@@ -89,6 +97,7 @@ The dataset is about 125 MB. Most of the machinery here exists for correctness r
 - **Ingestion parallelism.** JDBC read partitioning is configured and benchmarked, and shows no gain at this size; it starts to pay once transfer time dominates connection setup.
 - **Change capture.** Snapshot-based deletion detection reads every bronze batch on a full run. At volume, change data capture at the source replaces it, which the silver contract allows without touching gold.
 - **Gold engine.** T-SQL procedures suit a warehouse serving Direct Lake at this size. Heavier transformation would be evaluated on Spark or materialized lake views against the same contract.
+- **Reconciliation.** The publisher's baseline is a fixed answer key that holds only while the source is static. With a changing source, the run's gate becomes a silver-to-gold reconciliation computed on both sides in every run, and the baseline becomes an on-demand check.
 
 ---
 
@@ -127,6 +136,7 @@ To reproduce it, see [Setting up the source](#setting-up-the-source).
 | Transformation | PySpark on Fabric Runtime 2.0, Dataflow Gen2, T-SQL stored procedures |
 | Change detection | Delta change data feed, Spark connector for Fabric Data Warehouse, Semantic Link |
 | Warehouse | Fabric Data Warehouse, T-SQL |
+| Orchestration | Fabric Data Factory pipelines, Slack incoming webhook through a Fabric Web connection |
 | Semantic layer | Direct Lake, DAX |
 | Configuration | Fabric Variable Library; Azure Key Vault wired in code, provisioned with the Azure subscription in M4 |
 | Source control | Fabric Git integration, GitHub |
@@ -150,6 +160,10 @@ Microsoft describes two medallion deployment patterns: all layers as lakehouses,
 ### Change detection in Spark, modelling in T-SQL
 
 The warehouse reads silver through the SQL analytics endpoint, which exposes the current snapshot only. Timestamp watermarks were rejected because they cannot see deletions; Copy job's change data capture from a lakehouse table was rejected because it is in preview, copies whole rows, and cannot derive keys that change indirectly, such as every trip of a changed load. A notebook therefore reads the change feed and passes keys, not data, to the warehouse; every modelling rule stays in T-SQL.
+
+### Orchestration in Fabric Data Factory, gold first
+
+Every orchestrated item is a Fabric item, so the pipelines are Fabric Data Factory rather than a separate Azure Data Factory: native notebook and Warehouse procedure activities, one workspace, one Git sync and one monitoring surface. The pipeline starts at silver for now. Bronze and silver are rebuilt in M4 on a source with change data capture, and orchestrating today's versions would mean building that part twice; the parent pipeline gains them as a step ahead of gold.
 
 ### Soft deletes, never physical deletes
 
@@ -191,6 +205,7 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 ```
 ├── fabric/     Fabric item definitions (managed by Git integration)
 ├── sql/        Source database schema and load scripts
+├── tests/      Test helpers that run outside the deployed workspace
 └── docs/       Per-layer design notes and comparisons
 ```
 
@@ -202,7 +217,7 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 |---|---|
 | M1 Bronze ingestion | Complete |
 | M2 Silver transformation | Complete |
-| M3 Gold star schema and semantic model | In progress: star schema, loading and reconciliation complete; orchestration and semantic model in progress |
+| M3 Gold star schema and semantic model | In progress: star schema, loading, reconciliation and orchestration complete; semantic model in progress |
 | M4 Deployment pipelines and CI/CD | Planned |
 | M5 Eventhouse and KQL | Planned |
 | M6 dbt vs Fabric comparison write-up | Planned |

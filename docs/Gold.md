@@ -6,7 +6,8 @@ Kimball star schema in `wh_logistics_gold`, a Fabric Data Warehouse built with T
 
 - Six facts, eight dimensions and four junk dimensions, with three special members on every dimension: Missing, Unknown and Not Applicable.
 - Facts load incrementally: a Spark notebook reads silver's change feed, and T-SQL procedures rebuild exactly the changed keys, inside one transaction per fact, with soft deletes and a mass-deletion guard. See [Loading the facts](#loading-the-facts).
-- Every fact was tested through the real pipeline, and five defects were found and fixed. See [Testing](#testing).
+- A Fabric Data Factory pipeline runs the whole gold load under one run_id, every step safe to retry, and posts any failure to Slack. See [Orchestration](#orchestration).
+- Every fact was tested through the real pipeline, failure and recovery included, and six defects were found and fixed. See [Testing](#testing).
 - Ten metric comparisons reproduce the publisher's monthly baselines exactly and fail the run on any mismatch. See [Reconciliation](#reconciliation).
 
 Gold reads silver two ways. The stored procedures read current state through the silver SQL analytics endpoint, with cross-database queries. A Spark notebook, `nb_gold_change_detection`, reads silver's Delta change data feed to decide which business keys each fact must rebuild, because the change feed is a Delta capability that T-SQL cannot read. The notebook hands the keys to the warehouse; the procedures do all the modelling.
@@ -303,11 +304,11 @@ Every fact loads in two halves sharing one `run_id`: the change detection notebo
 
 ### Change detection
 
-`nb_gold_change_detection` runs once per pipeline run, after silver and before the fact procedures.
+`nb_gold_change_detection` runs once per pipeline run, after the dimensions and before the fact procedures.
 
-**It refuses a reused `run_id`.** A run_id names one detection and the gold load that consumes it. Before reading anything, the notebook checks that its run_id appears in neither the run log nor the change-feed ledger.
+**A run_id may repeat only until a fact has used it.** One run_id names one pipeline run, and every step logs under it. Detection may run again under the same run_id, which is what a pipeline retry after an interrupted detection does, as long as no fact procedure has logged against it yet. The repeat is safe: procedures read their worklist with `DISTINCT`, and the checkpoint takes the newest window. Once a fact has used the run_id, detection refuses it, so a success can never be attributed to a detection that came after it.
 
-**It checks that the warehouse sees current silver.** The procedures read silver through the SQL analytics endpoint, whose metadata Microsoft documents as syncing in the background, while the notebook reads Delta directly. The notebook forces a metadata sync through Semantic Link (`refresh_sql_endpoint_metadata`), then compares a fingerprint of all 12 silver tables as Spark and the endpoint each see them: row count, deleted count and the latest `_source_changed_at` in microseconds. Any difference stops the run before a key is staged.
+**It checks that the warehouse sees current silver.** The procedures read silver through the SQL analytics endpoint, whose metadata Microsoft documents as syncing in the background, while the notebook reads Delta directly. `nb_silver_endpoint_sync` forces a metadata sync through Semantic Link (`refresh_sql_endpoint_metadata`), then compares a fingerprint of all 12 silver tables as Spark and the endpoint each see them: row count, deleted count and the latest `_source_changed_at` in microseconds. Any difference stops the run. The pipeline runs it first, before the dimensions read silver, and detection runs it again with `%run` immediately before staging keys, so the check lives in one notebook.
 
 **It reads each source table's change feed from that fact's own checkpoint.** Each fact declares the silver tables it reads, and each (fact, table) pair has a checkpoint: the last Delta version a successful run of that fact consumed. The notebook reads the window after the checkpoint up to the current version and derives the affected keys:
 
@@ -354,7 +355,10 @@ Each procedure follows the same sequence:
 | `log.etl_run` | append-only run log: started, succeeded or failed per step, with row counts |
 | `log.cdf_batch` | the version window each run read, per fact and source table |
 | `log.vw_unfinished_runs` | detections no successful load has followed |
-| `stg.usp_purge_orphan_keys` | removes worklist rows at least 24 hours old that no success of their step followed |
+| `log.vw_reconciliation_latest` | the newest reconciliation attempt for each run |
+| `dim.usp_load_dimensions` | loads the six SCD2 and five junk dimensions under the run_id, naming the dimension that failed |
+| `log.usp_assert_gold_run_complete` | fails the run unless the dimensions and all six facts logged success under the run_id |
+| `stg.usp_purge_orphan_keys` | removes worklist rows at least 24 hours old once a later run of the same step has made them redundant |
 
 Every procedure raises its own numbered errors, so a failure in the run log identifies its source directly:
 
@@ -363,13 +367,67 @@ Every procedure raises its own numbered errors, so a failure in the run log iden
 | 500xx | `ref.us_state` |
 | 501xx | `dim_date` |
 | 502xx, 504xx | special members |
-| 503xx | reference dimensions, one decade each (customer 5030x to truck 5035x) |
+| 503xx | reference dimensions, one decade each (customer 5030x to truck 5035x); the dimension wrapper 5039x |
 | 505xx | run log writer |
 | 506xx | facts, one decade each (trip 5061x to lifecycle 5066x) |
 | 507xx | worklist purge |
-| 508xx | baseline reconciliation |
+| 508xx | baseline reconciliation (5080x) and run completeness (5081x) |
 
 The change feed must stay readable until gold has consumed it, so silver's `VACUUM` runs only after every fact's checkpoint has passed the versions it would remove. When it has not, the next run falls back to full reconciliation rather than failing.
+
+---
+
+## Orchestration
+
+Two Fabric Data Factory pipelines run the gold load. Bronze and silver run by hand until M4 rebuilds them on a change-data-capture source; orchestrating them now would mean building that part twice.
+
+**`pl_logistics_daily`** holds the daily schedule and the alerting. It invokes `pl_gold_load`, waits for it, and on failure posts the run to Slack and then fails itself. A failure handled by an on-failure branch would otherwise leave the parent green, hiding the failure from the run history and from Fabric's scheduled-run notifications.
+
+**`pl_gold_load`** does the work:
+
+```
+Set_Run_Id -> Sync_Silver_Endpoint -> Load_Dimensions -> Detect_Changes -> six fact procedures in parallel
+           -> Assert_Run_Complete -> Reconcile_Baselines -> Purge_Worklists
+```
+
+Every arrow is on success: a failure skips everything after it and fails the run.
+
+| Step | Retry | Why a retry is safe |
+|---|---|---|
+| `Sync_Silver_Endpoint` | 2, increasing delay | reads only |
+| `Load_Dimensions` | 2, increasing delay | each dimension commits on its own and a rerun changes nothing |
+| `Detect_Changes` | 1, increasing delay | detection may repeat under the run_id until a fact has used it |
+| six fact procedures | 2, increasing delay | a failed procedure rolls back and leaves its worklist untouched |
+| `Assert_Run_Complete` | none | its answer cannot change on a retry |
+| `Reconcile_Baselines` | 1 | each attempt commits whole, and a real mismatch fails again identically |
+| `Purge_Worklists` | 1 | deletes only rows a later run has made redundant |
+
+Increasing delay is Fabric's exponential back-off. Six procedures failing together for one platform reason do not retry at the same moment, the pattern Microsoft recommends for warehouse write conflicts.
+
+**One run_id.** The parent passes `pl-` plus its own run ID, and every step logs under it, so the Slack alert, the Monitoring hub and `log.etl_run` all name the same run. Run on its own, `pl_gold_load` generates the same form from its own run ID.
+
+**The six facts run in parallel.** Each procedure updates and deletes only its own fact and worklist. The only shared table, `log.etl_run`, receives inserts only, which Microsoft documents as not causing write-write conflicts.
+
+**A completeness check before reconciliation.** `log.usp_assert_gold_run_complete` fails the run unless the dimensions and all six facts logged success under the run_id. It exists because a copied pipeline activity once kept the wrong procedure name: one fact ran twice, another never ran, and the run still finished green. See [Testing](#testing).
+
+**No overlapping runs.** Both pipelines run with concurrency 1, so a second run waits in a queue rather than reading the same checkpoints at the same time.
+
+### Recovery
+
+A fact that fails after detection loses nothing. Its transaction rolls back, its worklist stays, and its checkpoint stays where it was, because a checkpoint only moves after a success. The other five facts commit and move on. Two recovery paths follow:
+
+1. **Rerun the failed procedure with the same run_id.** Its worklist is still there, so it rebuilds exactly the keys it missed.
+2. **Start a new run.** Detection for the failed fact reads from its unmoved checkpoint, so the new window covers everything the failed run left unconsumed.
+
+The purge supports both. Worklist keys left by a failed run are kept until a later detection for the same step has succeeded; a full-scan worklist waits for a later full scan, because an incremental window does not cover what a full reconciliation was asked to check. Only then, and after 24 hours, are they removed.
+
+### Alerting
+
+On failure, `pl_logistics_daily` posts to a private Slack channel: the pipeline, the parent and child run IDs, the gold run_id, the trigger, the error and a link to the run in the Monitoring hub. The error text is URL-encoded and its quotes, backslashes and line breaks replaced before it goes into the JSON body, so no error message can break the alert.
+
+The Slack webhook URL is held by a Fabric Web connection. The pipeline definition, and therefore the repository, carries only the connection's ID.
+
+Slack was chosen over the Office 365 Outlook activity because Outlook needs an Exchange Online mailbox, which a Fabric licence does not include, while an incoming webhook needs no Microsoft licensing at all. Fabric's own failure notifications on the schedule cover scheduled runs as a second channel.
 
 ---
 
@@ -388,13 +446,30 @@ Every fact was tested through the real pipeline with a fixed sequence of runs, e
 
 Each run is checked in both directions against silver: row and key counts, every column compared with `EXCEPT` both ways, a key oracle that translates gold's surrogate keys back to business ids, worklist leftovers and checkpoint positions. For `fact_load_lifecycle` an independent oracle rebuilds every row from silver, and a cross-fact check confirms that every live trip's resources and dispatch date agree with the lifecycle row of its load.
 
-Review and testing found five defects, each fixed:
+Review and testing found six defects, each fixed:
 
-- **Reused run_ids skipped changes.** The checkpoint view first matched a window to a success by run_id alone, so a detection repeated under a run_id that had already succeeded advanced the checkpoint without any procedure processing its keys. The cross-fact check exposed it as one lifecycle row disagreeing with `fact_trip`. The view now requires the success to follow the detection, and the notebook rejects reused run_ids.
+- **Reused run_ids skipped changes.** The checkpoint view first matched a window to a success by run_id alone, so a detection repeated under a run_id that had already succeeded advanced the checkpoint without any procedure processing its keys. The cross-fact check exposed it as one lifecycle row disagreeing with `fact_trip`. The view now requires the success to follow the detection, and the notebook rejects a run_id a fact has already used.
 - **A trip or event moving between loads left the old load stale.** The change feed was read from post-update images only. The pre-update image is now included.
 - **A recreated silver table could skip changes.** The checkpoint was the highest version any successful run had consumed. A recreated table restarts its versions at 0, so the old, higher checkpoint stayed the maximum: every run repeated a full scan until the new table passed the old number, and the next window then started there, skipping the versions in between. The checkpoint is now the most recent successful window.
 - **Route Missing and Unknown were conflated.** A trip whose load had no route resolved to Unknown, which signals a broken reference, instead of Missing.
 - **Rebuilt dimensions orphaned fact keys.** Rebuilding a dimension reassigns its surrogate keys, and facts loaded earlier pointed at keys that no longer existed. Repair now re-queues any fact row whose key has no dimension row.
+- **A pipeline activity called the wrong procedure.** `Load_fact_fuel_purchase` was copied from the delivery event activity and kept its procedure name, so delivery events loaded twice and fuel purchases never loaded, while the run finished green. The run log showed it: each procedure logs its own step name. `log.usp_assert_gold_run_complete` now fails any run missing a step.
+
+### Pipeline acceptance tests
+
+The procedure tests above prove each piece. These prove the pieces wired together, by breaking the real pipeline on purpose. The source is static, so `tests/pipeline/touch_silver.py` creates the changes: it rewrites silver rows with their own values, which Delta records in the change feed without changing any value, and it can flag rows deleted and restore them exactly from an earlier version.
+
+| Test | What happened | Result |
+|---|---|---|
+| No change | a full run with silver unchanged | every step once, 0 keys, checkpoints unchanged, reconciliation passes |
+| Interrupted detection | the run cancelled during change detection, then rerun with the same run_id | the rerun loads the 100 changed trips once, and the worklist is empty |
+| Fact fails, same run_id | `fact_trip` broken, 100 trips changed | the other five facts commit; `fact_trip`'s 100 keys wait and its checkpoint stays; the Slack alert names the error. Rerunning the procedure with the same run_id rebuilds the 100 trips and moves the checkpoint |
+| Fact fails, new run | the same failure, recovered by a fresh pipeline run | the new run re-reads the window the failed run never consumed and rebuilds the 100 trips; the failed run's worklist becomes redundant for the purge |
+| Delete and restore | 3 trips flagged deleted in silver, then restored | the trips are soft-deleted in gold and reconciliation fails with 50802, correctly, because gold no longer matches the baseline; after the restore both pass again |
+| Upstream failure | the dimension step broken | every later step skipped, the run fails, Slack alerted |
+| Overlapping runs | a second run started during the first | the second waits in the queue until the first finishes |
+
+Retries were observed with growing gaps between attempts. A real write-write conflict cannot be timed reliably by hand, so the tests prove what a conflict leads to instead: a failed procedure leaves a consistent state and recovers.
 
 ---
 
@@ -431,6 +506,10 @@ The two near-misses keep their status under the exact-match rule; a one-unit dif
 
 The baseline's stored precision was measured rather than assumed. The first comparison used the precision declared when the baselines were loaded, and every idle-hours and on-time mismatch was at most half of the baseline's last decimal place, the signature of comparing at the wrong precision rather than of a different definition.
 
+Each attempt's results commit together, so a retried reconciliation never leaves a partial attempt behind; `log.vw_reconciliation_latest` reads the newest attempt per run. The failure is raised after the commit, so a mismatch keeps its evidence.
+
 The procedure's failure path is tested by adding one mile to one trip: both `total_miles` metrics fail on exactly one row with a difference of 1.0000, `trips_completed` still passes, and the run stops with error 50802 naming the failing metrics.
+
+**The baseline is static.** It was computed once by the publisher from the same static extract this project loads, so it stays valid only while the source does not change. The delete test above shows the consequence: a correct soft delete fails the reconciliation, because gold no longer matches a fixed answer key. M4 brings a changing source, and with it a silver-to-gold reconciliation as the run's gate, comparing both layers in every run so they change together. The publisher's baseline then remains an on-demand proof of gold's logic rather than a daily check.
 
 Building persisted aggregates with no performance justification would be manufacturing a production object to satisfy a pattern. At 541,172 fact rows the warehouse does not need them.
