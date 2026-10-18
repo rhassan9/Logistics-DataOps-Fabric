@@ -1,7 +1,27 @@
 # ---------------------------------------------------------------------------
+# Silver touch helper: test-only
+# ---------------------------------------------------------------------------
+# Makes controlled changes to one silver table so gold's change detection,
+# soft deletes and restores can be tested through the real pipeline. The
+# source is static, so this is the only way those paths see a change.
+#
+# It writes to silver directly, bypassing bronze and the silver notebook.
+# Run it only in a development workspace, never against data anyone relies on.
+#
+# Paste into a Fabric notebook attached to lh_logistics_silver. Modes:
+#   touch    rewrite n active keys unchanged: a change-feed entry with no
+#            value change, so gold should rebuild those keys to identical rows
+#   delete   flag n active keys deleted at the source; prints keys_csv and
+#            restore_from_version for the restore run
+#   restore  copy the delete flag and change date back from that version
+#
+# Typical sequence: touch, run the gold load; delete, run it; restore, run
+# it. Use a different offset per test to pick fresh keys.
+#
+# ---------------------------------------------------------------------------
 # CELL 1: PARAMETERS
 # ---------------------------------------------------------------------------
-mode                 = "touch"         # touch | delete | restore
+mode                = "touch"         # touch | delete | restore
 table                = "silver_trips"
 key                  = "trip_id"
 n                    = 100             # touch and delete: how many active keys
