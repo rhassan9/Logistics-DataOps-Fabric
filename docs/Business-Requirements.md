@@ -64,6 +64,16 @@ after fuel and allocated maintenance) with the allocation basis stated wherever 
 Measures: revenue, fuel surcharge, accessorial charges, fuel cost, contribution after fuel,
 revenue per mile, fuel cost per mile.
 
+Revenue is line haul only: it spans 0.85 to 1.15 times the route's base rate times distance,
+mean 0.9998, so fuel surcharge and accessorial charges are added to it, not contained in it.
+
+Fuel purchases do not follow trip distance. Across 85,410 trips, miles correlate with the
+trip's own gallons used at 0.9835 but with fuel cost at 0.0000: every lane buys about 280 to
+300 gallons for $1,080 to $1,180 per trip, whether it runs 94 miles or 3,230. Contribution after fuel by route
+therefore mostly reflects lane length, and the shortest lanes show negative contribution. The
+measure keeps fuel cost as purchases, the money actually spent, and the report states the
+finding beside it.
+
 ### FE-2 Revenue and cost per asset
 
 *What is revenue per truck? What is cost per mile?*
@@ -275,6 +285,7 @@ These surfaced during profiling and constrain how measures may be interpreted.
 | No dimension changes anywhere in the source | SCD Type 2 is implemented but has no history to capture until generated data is added |
 | `service_urgency` is an even random split with no cost, labour or downtime consequence | valid as a slicer, but no measure may assume it differentiates |
 | Monthly load volume varies only 4 percent once normalised to loads per day | no seasonal analysis; apparent monthly troughs are month length |
+| Fuel purchased per trip does not follow trip distance (correlation 0.0000 with fuel cost; 0.98 for gallons used on the trip) | contribution after fuel by route mostly reflects lane length; fuel efficiency uses gallons used |
 
 ---
 

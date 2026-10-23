@@ -10,6 +10,7 @@ This is a migration of [Logistics-DataOps-Pipeline](https://github.com/rhassan9/
 - **6 facts, 8 dimensions, 4 junk dimensions** in a Fabric Data Warehouse, loaded incrementally from silver's Delta change feed by T-SQL procedures.
 - **Exact reconciliation against the dataset publisher's own monthly figures:** ten metric comparisons, four on all 4,464 driver-months and six on all 3,312 truck-months, match exactly and fail the run on any mismatch.
 - **Deletes handled end to end without losing history:** soft deletes from silver through every dimension and fact, behind a mass-deletion guard.
+- **A Direct Lake semantic model over the full star**: 18 tables, 34 relationships and 55 measures covering all nine requirements, with calculation groups for alternate date roles, every figure validated against warehouse SQL and the model checked with Best Practice Analyzer. A two-page report answers on-time delivery by lane and contribution after fuel by route.
 - **One scheduled pipeline for the whole gold load**, every step safe to retry, failures posted to Slack, and recovery after a mid-run failure proven by breaking the real pipeline on purpose.
 - **Eleven defects caught before release** by reconciliation, independent rebuilds, failure testing and review, each fixed and listed [below](#defects-caught-before-release).
 
@@ -28,7 +29,7 @@ flowchart TD
     GLD["<b>Gold</b> · wh_logistics_gold<br/>Kimball star schema,<br/>T-SQL stored procedures"]
     REC["Reconciliation against<br/>the publisher's baselines"]
     PL["<b>Orchestration</b><br/>pl_logistics_daily → pl_gold_load<br/>schedule · retries · Slack alerts"]
-    SM["Direct Lake semantic model<br/>→ Power BI"]
+    SM["<b>Semantic model</b> · sm_logistics_gold<br/>Direct Lake on OneLake<br/>→ rpt_lane_performance"]
     OPS[("lh_logistics_ops<br/>profiling, baselines, run logs")]
 
     SRC -->|"Spark notebook (JDBC) · Copy job"| BRZ
@@ -49,6 +50,7 @@ flowchart TD
 | **Silver** | One validated row for every business key the source has ever contained, carrying its current state. A key that disappears from the source is kept and flagged, and every row records when its state took effect. Those two columns are a contract with gold that does not depend on how changes are captured. | [docs/Silver.md](docs/Silver.md) |
 | **Gold** | Kimball star schema in a Fabric Data Warehouse. A Spark notebook reads silver's change feed and hands each fact exactly the keys it must rebuild; every fact load is gated, transactional and logged, and the model is reconciled on every run. | [docs/Gold.md](docs/Gold.md) |
 | **Orchestration** | `pl_gold_load` runs endpoint sync, dimensions, change detection, the six facts in parallel, a completeness check, reconciliation and cleanup under one run_id. `pl_logistics_daily` schedules it and posts failures to Slack. | [docs/Gold.md](docs/Gold.md#orchestration) |
+| **Semantic model** | Direct Lake on OneLake over the whole star, with role-playing dates, calculation groups, named and described for people and AI tools, and a report for DP-1 and FE-1. | [docs/Gold.md](docs/Gold.md#semantic-model) |
 | **Requirements** | What gold must answer, and the questions this data cannot honestly support. | [docs/Business-Requirements.md](docs/Business-Requirements.md) |
 
 `lh_logistics_ops` sits outside the medallion flow. It holds profiling output, the validation baselines used to reconcile gold, and the bronze and silver run logs.
@@ -66,6 +68,10 @@ flowchart TD
 **Recovery proven, not assumed.** A fact that fails after change detection keeps its worklist and its checkpoint, while the other facts commit. The acceptance tests broke a fact procedure inside the real pipeline and recovered it both ways: rerunning that one procedure, and starting a fresh run that re-reads what the failed run never consumed. A completeness check fails any run that skips a step, added after a copied pipeline activity loaded one fact twice and another not at all while the run reported success.
 
 **Correctness checked against an independent answer key.** Gold rebuilds the publisher's monthly driver and truck aggregates from its facts. Ten metric comparisons match exactly, four on all 4,464 driver-months and six on all 3,312 truck-months, including revenue attributed to the resource that delivered each load. A mismatch on any of them fails the run. Metrics that do not match are reported rather than tuned until they do.
+
+**A semantic model validated like the warehouse.** Every measure was compared with an independent warehouse query before any column was renamed: totals, all 58 lanes, the date-role switch month by month and active trucks under filters. Best Practice Analyzer then reviewed the model, and each finding was judged against the rule's code: formats were fixed, and the rest were kept with a stated reason, including one rule whose condition contradicts its own description.
+
+**Findings stated, not hidden.** Building the report exposed a property of the synthetic source: fuel purchases do not follow trip distance (correlation 0.0000 with fuel cost, against 0.98 for fuel actually used on the trip), so the shortest lanes show negative contribution after fuel. The page states this rather than replacing the source's figure with an estimate.
 
 **Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver. The orchestration was then tested by failure: a cancelled detection, a broken fact, a broken dimension step and overlapping runs.
 
@@ -86,6 +92,18 @@ Each was caught by reconciliation against a known number, by an independent rebu
 | Gold | A load with no route was reported as a broken reference rather than a missing value |
 | Gold | Taking the highest consumed version as the checkpoint would skip changes after a silver table is recreated; the checkpoint is the most recent successful window |
 | Orchestration | A copied pipeline activity kept its procedure name, so one fact loaded twice and another never loaded while the run reported success; a completeness check now fails any run missing a step |
+
+---
+
+## Semantic model and report
+
+![Semantic model star schema](docs/images/semantic_model_star.png)
+
+![DP-1 On-time delivery by lane](docs/images/dp1_on_time_by_lane.png)
+
+![FE-1 Contribution after fuel by route](docs/images/fe1_contribution_after_fuel.png)
+
+Design, measures, validation and the Best Practice Analyzer review are in [docs/Gold.md](docs/Gold.md#semantic-model).
 
 ---
 
@@ -137,7 +155,7 @@ To reproduce it, see [Setting up the source](#setting-up-the-source).
 | Change detection | Delta change data feed, Spark connector for Fabric Data Warehouse, Semantic Link |
 | Warehouse | Fabric Data Warehouse, T-SQL |
 | Orchestration | Fabric Data Factory pipelines, Slack incoming webhook through a Fabric Web connection |
-| Semantic layer | Direct Lake, DAX |
+| Semantic layer | Direct Lake on OneLake, DAX, calculation groups, Power BI report, Best Practice Analyzer (semantic-link-labs) |
 | Configuration | Fabric Variable Library; Azure Key Vault wired in code, provisioned with the Azure subscription in M4 |
 | Source control | Fabric Git integration, GitHub |
 
@@ -164,6 +182,10 @@ The warehouse reads silver through the SQL analytics endpoint, which exposes the
 ### Orchestration in Fabric Data Factory, gold first
 
 Every orchestrated item is a Fabric item, so the pipelines are Fabric Data Factory rather than a separate Azure Data Factory: native notebook and Warehouse procedure activities, one workspace, one Git sync and one monitoring surface. The pipeline starts at silver for now. Bronze and silver are rebuilt in M4 on a source with change data capture, and orchestrating today's versions would mean building that part twice; the parent pipeline gains them as a step ahead of gold.
+
+### Direct Lake on OneLake over the full star
+
+The semantic model reads gold's Delta tables directly from OneLake, so it never falls back to DirectQuery, and it carries every fact and dimension rather than only what the report uses: Direct Lake loads a column only when a query needs it, and the model then answers all nine requirements. Date roles are inactive relationships switched by calculation groups, so no measure is copied per date.
 
 ### Soft deletes, never physical deletes
 
@@ -217,7 +239,7 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 |---|---|
 | M1 Bronze ingestion | Complete |
 | M2 Silver transformation | Complete |
-| M3 Gold star schema and semantic model | In progress: star schema, loading, reconciliation and orchestration complete; semantic model in progress |
+| M3 Gold star schema and semantic model | Complete |
 | M4 Deployment pipelines and CI/CD | Planned |
 | M5 Eventhouse and KQL | Planned |
 | M6 dbt vs Fabric comparison write-up | Planned |

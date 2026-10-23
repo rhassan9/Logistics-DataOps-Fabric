@@ -9,6 +9,7 @@ Kimball star schema in `wh_logistics_gold`, a Fabric Data Warehouse built with T
 - A Fabric Data Factory pipeline runs the whole gold load under one run_id, every step safe to retry, and posts any failure to Slack. See [Orchestration](#orchestration).
 - Every fact was tested through the real pipeline, failure and recovery included, and six defects were found and fixed. See [Testing](#testing).
 - Ten metric comparisons reproduce the publisher's monthly baselines exactly and fail the run on any mismatch. See [Reconciliation](#reconciliation).
+- A Direct Lake semantic model carries the whole star: 55 measures answer all nine requirements, every figure validated against warehouse SQL and the model checked with Best Practice Analyzer. A two-page report answers on-time delivery by lane and contribution after fuel by route. See [Semantic model](#semantic-model).
 
 Gold reads silver two ways. The stored procedures read current state through the silver SQL analytics endpoint, with cross-database queries. A Spark notebook, `nb_gold_change_detection`, reads silver's Delta change data feed to decide which business keys each fact must rebuild, because the change feed is a Delta capability that T-SQL cannot read. The notebook hands the keys to the warehouse; the procedures do all the modelling.
 
@@ -97,6 +98,8 @@ No table carries primary, unique or foreign key constraints. Fabric supports the
 `is_complete_month` is 1 when the whole month falls inside the loaded data window, supplied as a parameter (2024-12-31). Delivery events extend to 2025-01-03, so January 2025 is incomplete; filtering on the flag removes the false collapse from monthly trends and drops 2025 from year-level charts. Keys are deterministic, so regenerating the table never changes a key a fact depends on.
 
 A fact's own date key must exist in `dim_date`. Facts dated beyond 2025-12-31 require the date range to be extended first; otherwise they resolve to the Unknown member.
+
+`dim_calendar` is the semantic model's date table: `dim_date` without its three special rows, rebuilt by `dim.usp_load_dim_date` in the same transaction from the rows just generated, so the calendar is defined once. A marked date table needs a date column with unique values, no blanks, no missing dates and whole years, and the special rows have no date. The procedure proves those properties on every load (row count, uniqueness, range, and each key matching its date) and fails with 50106 otherwise, because web modeling does not validate a marked date column. `dim_date` keeps the special rows for warehouse integrity: every fact date key resolves to it, including the Missing, Unknown and Not Applicable members.
 
 ### Slowly changing dimensions
 
@@ -513,3 +516,116 @@ The procedure's failure path is tested by adding one mile to one trip: both `tot
 **The baseline is static.** It was computed once by the publisher from the same static extract this project loads, so it stays valid only while the source does not change. The delete test above shows the consequence: a correct soft delete fails the reconciliation, because gold no longer matches a fixed answer key. M4 brings a changing source, and with it a silver-to-gold reconciliation as the run's gate, comparing both layers in every run so they change together. The publisher's baseline then remains an on-demand proof of gold's logic rather than a daily check.
 
 Building persisted aggregates with no performance justification would be manufacturing a production object to satisfy a pattern. At 541,172 fact rows the warehouse does not need them.
+
+---
+
+## Semantic model
+
+`sm_logistics_gold` is a Direct Lake semantic model over the whole star: six facts, twelve dimensions with `dim_calendar` in place of `dim_date`, two calculation groups and one helper table. `ref`, `stg` and `log` stay out of it. The report `rpt_lane_performance` is built on it.
+
+![Semantic model star schema](images/semantic_model_star.png)
+
+**Direct Lake on OneLake.** The model is created from the OneLake catalog rather than from the SQL analytics endpoint. Direct Lake on OneLake never falls back to DirectQuery, and the model needs neither SQL views nor SQL security, the two reasons Microsoft gives for choosing Direct Lake on SQL. Direct Lake loads a column into memory only when a query uses it, so carrying the full star costs nothing for tables a report does not touch.
+
+**The full star, not only what the report needs.** Nine requirements are supported, and the model answers all nine, with its measures in a display folder per business area. The report shows two of them.
+
+### Tables and relationships
+
+| Warehouse | Model | Warehouse | Model |
+|---|---|---|---|
+| `fact_load_lifecycle` | Load | `dim_calendar` | Date |
+| `fact_trip` | Trip | `dim_route` | Route |
+| `fact_delivery_event` | Stop Event | `dim_delivery_status` | Stop Status |
+| `fact_fuel_purchase` | Fuel Purchase | `dim_maintenance_class` | Maintenance Class |
+| `fact_maintenance` | Maintenance Event | `dim_incident_class` | Incident Class |
+| `fact_safety_incident` | Safety Incident | other dimensions | Customer, Driver, Truck, Trailer, Facility, Location, Load Type |
+
+The delivery event fact holds pickups as well as deliveries, so the model calls it Stop Event: `Delivery Events` counts deliveries only and `Stop Events` counts both.
+
+All 34 relationships are many-to-one and single-direction, from dimension to fact, and facts never relate to each other, so every dimension reaches every fact by one path. Driver, Truck and Trailer reach Load through the fulfilling keys, which carry revenue, and reach Trip through the trip's own keys, which carry miles and fuel. Each measure is defined on its own fact, so revenue per truck never passes through trips and cannot be counted twice.
+
+Each fact has one active date: stops by scheduled date, loads and trips by dispatch date, fuel by purchase date, maintenance and incidents by their own date. Four inactive relationships hold the other roles: the stop's actual date and the load's booked, pickup and delivery dates.
+
+The Date table is `dim_calendar`, marked on its date column. A fact row on a special date member would appear as Blank in reports; none exists today, and every fact date key in every role was checked against the calendar.
+
+### Calculation groups
+
+`Stop Date Basis` (Scheduled Date by default, or Actual Date) and `Load Date Basis` (Dispatch Date by default, or Booked, Pickup or Delivery Date) switch any measure to an alternate date role with `USERELATIONSHIP`, so no measure is repeated per date. An item re-dates only the measures of its own fact: under `Load Date Basis`, charges move to the chosen date while fuel stays on purchase date. Booking to dispatch is 0 days on every load, so Booked Date currently equals Dispatch Date.
+
+No time intelligence group is built, because no requirement asks for year-to-date or prior-period figures. The calculation groups also turn on Discourage implicit measures, so report authors use only the explicit measures.
+
+### Measures
+
+55 measures, each with a description and a format. Every base measure excludes rows deleted at the source itself, because gold keeps them. Ratios divide two totals rather than averaging row-level ratios, signed arrival variance is averaged rather than summed, and status filters use `KEEPFILTERS` so a slicer narrows a measure instead of being replaced.
+
+| Measure | Definition |
+|---|---|
+| Line-Haul Revenue | the source `revenue`. It excludes fuel surcharge and accessorial charges: revenue divided by route base rate times distance spans 0.85 to 1.15 with a mean of 0.9998 |
+| Total Charges | line-haul revenue plus fuel surcharge plus accessorial charges |
+| Contribution after Fuel | total charges minus fuel cost; not profit, since the source has no driver pay, depreciation or overhead |
+| On-Time Rate | on-time deliveries over delivery events, pickups excluded; on time is arrival less than 120 minutes from the appointment at full timestamp precision |
+| Active Trucks, Active Drivers | distinct business ids with at least one trip in the selection, so SCD2 versions count once and special members not at all |
+| Gallons per Mile | trip fuel used over miles; blank when Driver is filtered, which enforces the rejected per-driver efficiency comparison in the model itself |
+| Preventable Rate, At-Fault Rate | flagged incidents over incidents where the flag was recorded |
+| Deliveries in Band | deliveries whose arrival variance falls in a 30-minute band of the disconnected `Arrival Variance Band` table |
+
+The bands carry no status label. Status is classified at full timestamp precision while the stored variance is rounded to 0.1 minute, so deliveries shown at exactly ±120.0 belong to either neighbouring status; the report colours each band by the source status instead.
+
+Not built: a utilization rate, which has no definition the data reproduces; contribution after allocated maintenance, which needs an allocation basis; and time intelligence.
+
+### Fuel cost does not follow distance
+
+Fuel purchases are generated independently of trip distance. Across 85,410 trips, miles correlate with the trip's own gallons used at 0.9835, but with gallons purchased at 0.0002 and with fuel cost at 0.0000. Every lane buys about 280 to 300 gallons for $1,080 to $1,180 per trip, whether the trip runs 94 miles (Philadelphia to New York, using 14.6 gallons) or 3,230 miles (Miami to Seattle, using 502).
+
+Contribution after fuel by route therefore mostly reflects lane length, and the shortest lanes show negative contribution. Fuel cost stays the purchases, which is the FE-1 definition and the money actually spent; a consumption-based estimate would be a modelled figure presented in place of the source's. The FE-1 page states the finding. Gallons per Mile uses gallons used, so fuel efficiency is unaffected.
+
+### Naming and metadata
+
+Names follow Microsoft's guidance for models read by people and by AI tools: human-readable, unique across tables, units written out, few acronyms. Columns are prefixed by their entity wherever another table could share the word (Truck Model Year, Trailer Model Year, Facility City, Location City). `Line-Haul Revenue` names what the source calls revenue, because three charge types make "revenue" alone ambiguous. Every table and measure has a description; each dimension has a row label and a key column, the surrogate key, since business ids repeat across SCD2 versions. Every fact column is hidden, so the facts act as measure tables, and Copilot ignores hidden fields.
+
+Copilot and Prep data for AI are not supported on trial capacities. The model carries the names, descriptions and hidden helpers those features read.
+
+### Security
+
+The model defines no roles, because no requirement defines who may see which rows. OneLake security roles are not available for warehouses, and Direct Lake on OneLake does not apply the warehouse's SQL security, so a data-access rule for this model belongs in its own roles, with a fixed-identity connection and no direct warehouse access for report viewers.
+
+### Validation
+
+Every figure the model produces was compared with an independent warehouse query (`22_stage7_validation.sql` against DAX query view) before any column was renamed:
+
+| Check | Compares |
+|---|---|
+| V0 | every dimension key unique, the one side of every relationship |
+| V1, V2 | DP-1 and FE-1 totals and all 58 lanes |
+| V3 | the other seven requirements' base measures |
+| V4 | Stop Date Basis by month: deliveries move between months, the total stays 85,410 |
+| V5 | Active Trucks and Drivers by year and by route |
+| V6 | fuel price derived from cost and gallons against the source's price per gallon |
+
+All matched.
+
+### Best Practice Analyzer
+
+The model was checked with Best Practice Analyzer, run as a notebook from the semantic model (semantic-link-labs). Each finding was judged against the rule's code rather than its title.
+
+| Finding | Outcome |
+|---|---|
+| Percentage, decimal and date formats; a summarized numeric column | fixed: `#,0.0%;-#,0.0%;#,0.0%`, `#,0.0`, `yyyy-mm-dd`, Summarize by None |
+| Inactive relationships never activated | kept: the rule searches measures only, and these are activated inside the calculation groups |
+| Date tables should be marked | kept: the rule matches "date" in the names of the two calculation groups |
+| Floating-point latitude and longitude | kept: the fixed decimal type holds four places and coordinates have six |
+| Calculated table without relationships | kept: `Arrival Variance Band` is a deliberate disconnected helper |
+| Gallons per Mile not formatted as a whole number | kept: three decimals, since a value such as 0.157 would display as 0.2 |
+| Remove unnecessary columns | kept: every flagged column is used by a measure. The rule's description says hidden columns not referenced by any DAX expression, but its condition tests the opposite, and unused hidden columns are not flagged |
+
+### Report
+
+`rpt_lane_performance` has one page per showcased requirement. Every visual is titled, and each page states its rules in a footnote and uses complete months only.
+
+**DP-1 On-time delivery by lane.** Rates, sample size and average arrival variance per lane, and the arrival-time distribution coloured by source status. A Stop Date Basis slicer switches between scheduled and actual date.
+
+![DP-1 On-time delivery by lane](images/dp1_on_time_by_lane.png)
+
+**FE-1 Contribution after fuel by route.** Charges, fuel cost and contribution per lane, ranked, with the fuel finding stated on the page. A Load Date Basis slicer switches the date role of the charges.
+
+![FE-1 Contribution after fuel by route](images/fe1_contribution_after_fuel.png)
