@@ -1,0 +1,503 @@
+/// One row per load from booking to delivery. Holds charges; its truck, driver and trailer are the ones that fulfilled the load.
+table Load
+	lineageTag: 1285a261-7f2d-4308-bd92-6ea0d0dee3c4
+	sourceLineageTag: [fact].[fact_load_lifecycle]
+
+	/// Count of loads, excluding loads deleted at the source.
+	measure Loads = CALCULATE ( COUNTROWS ( 'Load' ), 'Load'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Route Contribution
+		lineageTag: 69310547-a344-4301-9641-e5c32d23ee3b
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Line-haul revenue as recorded at the source; excludes fuel surcharge and accessorial charges.
+	measure 'Line-Haul Revenue' = CALCULATE ( SUM ( 'Load'[revenue] ), 'Load'[is_deleted_in_source] = FALSE () )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Route Contribution
+		lineageTag: 87c8678f-dd95-4d03-895e-0aef78c58e89
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Fuel surcharge billed on loads.
+	measure 'Fuel Surcharge' = CALCULATE ( SUM ( 'Load'[fuel_surcharge] ), 'Load'[is_deleted_in_source] = FALSE () )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Route Contribution
+		lineageTag: 9d140e45-edc3-4bae-b119-f4fe66cfa170
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Accessorial charges billed on loads, as recorded at the source.
+	measure 'Accessorial Charges' = CALCULATE ( SUM ( 'Load'[accessorial_charges] ), 'Load'[is_deleted_in_source] = FALSE () )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Route Contribution
+		lineageTag: 66c36682-2d6d-434d-b7ba-248bdfc9a15c
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Line-haul revenue plus fuel surcharge plus accessorial charges: everything billed for loads.
+	measure 'Total Charges' = [Line-Haul Revenue] + [Fuel Surcharge] + [Accessorial Charges]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Route Contribution
+		lineageTag: 0f8635e8-cc6c-4626-8189-32c83783d5a3
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Total charges minus fuel cost. Not profit or margin: the data has no driver pay, depreciation or overhead. Answers FE-1.
+	measure 'Contribution after Fuel' = [Total Charges] - [Fuel Cost]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Route Contribution
+		lineageTag: 80ca3426-d8e1-4a85-8ae3-07cf17b7a756
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Line-haul revenue divided by actual miles.
+	measure 'Line-Haul Revenue per Mile' = DIVIDE ( [Line-Haul Revenue], [Actual Miles] )
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		displayFolder: Route Contribution
+		lineageTag: fd03aebc-4ca2-4792-8f5d-0478916852ea
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Line-haul revenue divided by active trucks. Revenue is credited to the truck that fulfilled the load. Answers FE-2.
+	measure 'Line-Haul Revenue per Active Truck' = DIVIDE ( [Line-Haul Revenue], [Active Trucks] )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Asset Economics
+		lineageTag: 196917e7-d2ed-4d36-858d-4f5f4973a14c
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Actual miles divided by active trucks.
+	measure 'Miles per Active Truck' = DIVIDE ( [Actual Miles], [Active Trucks] )
+		formatString: #,0
+		displayFolder: Asset Economics
+		lineageTag: 1ca7a2ed-4ad6-4917-ad6a-3844e1ef524f
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Loads divided by active trucks.
+	measure 'Loads per Active Truck' = DIVIDE ( [Loads], [Active Trucks] )
+		formatString: " #,0.0"
+		displayFolder: Asset Economics
+		lineageTag: 789e0495-a99b-4261-9dc2-24e5ac1e7f8d
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		changedProperty = FormatStringDefinition
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Line-haul revenue divided by loads. Answers CR-1.
+	measure 'Line-Haul Revenue per Load' = DIVIDE ( [Line-Haul Revenue], [Loads] )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Customers
+		lineageTag: 1ab1714f-bc58-4160-bcaf-c399fdccce32
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Line-haul revenue for the selected customers as a share of all customers.
+	measure 'Share of Line-Haul Revenue' = DIVIDE ( [Line-Haul Revenue], CALCULATE ( [Line-Haul Revenue], ALL ( 'Customer' ) ) )
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Customers
+		lineageTag: 38311977-f72b-4aef-b136-bbc37ad14a2e
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column booked_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d2cfa88e-cfe1-4747-8a3e-ff94c8171f7b
+		sourceLineageTag: booked_date_key
+		summarizeBy: sum
+		sourceColumn: booked_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column dispatched_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 25175f7f-8d46-4ed6-a717-257085ae510b
+		sourceLineageTag: dispatched_date_key
+		summarizeBy: none
+		sourceColumn: dispatched_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column pickup_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 7b4545e9-8ef9-4d55-91b9-0938c088c8d8
+		sourceLineageTag: pickup_date_key
+		summarizeBy: sum
+		sourceColumn: pickup_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column delivery_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 62fd1b0a-cfd2-4181-8e3e-41b7d3b8a84f
+		sourceLineageTag: delivery_date_key
+		summarizeBy: sum
+		sourceColumn: delivery_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d9110e39-ec9c-4978-829b-98823bd2d7a5
+		sourceLineageTag: customer_key
+		summarizeBy: none
+		sourceColumn: customer_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column route_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 7bb91633-8c7f-4a34-ad99-18aba448789c
+		sourceLineageTag: route_key
+		summarizeBy: none
+		sourceColumn: route_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column load_type_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ea660031-1a39-4aae-a069-ced15362a7e7
+		sourceLineageTag: load_type_key
+		summarizeBy: none
+		sourceColumn: load_type_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column fulfilling_driver_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0a182ea9-17ef-4307-91cf-39c5cda2f59a
+		sourceLineageTag: fulfilling_driver_key
+		summarizeBy: none
+		sourceColumn: fulfilling_driver_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column fulfilling_truck_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 8176c1c4-032d-4aeb-b08d-f6a049c57885
+		sourceLineageTag: fulfilling_truck_key
+		summarizeBy: none
+		sourceColumn: fulfilling_truck_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column fulfilling_trailer_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2eb750db-a521-4df3-b2f8-efc7479adf57
+		sourceLineageTag: fulfilling_trailer_key
+		summarizeBy: none
+		sourceColumn: fulfilling_trailer_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column load_id
+		dataType: string
+		isHidden
+		lineageTag: a58b284a-acf7-4f11-b3fb-76454731bea0
+		sourceLineageTag: load_id
+		summarizeBy: none
+		sourceColumn: load_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column revenue
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: c1bd0985-0477-43c1-bcdb-d022a34e836e
+		sourceLineageTag: revenue
+		summarizeBy: sum
+		sourceColumn: revenue
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column fuel_surcharge
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 50954a36-2006-4407-8b6e-e17f15504882
+		sourceLineageTag: fuel_surcharge
+		summarizeBy: sum
+		sourceColumn: fuel_surcharge
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column accessorial_charges
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 92541ef2-50cb-40e1-92f6-053a786ac81e
+		sourceLineageTag: accessorial_charges
+		summarizeBy: sum
+		sourceColumn: accessorial_charges
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column weight_lbs
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 70c16118-2e82-4b8f-a7f0-c1c20f1536a8
+		sourceLineageTag: weight_lbs
+		summarizeBy: sum
+		sourceColumn: weight_lbs
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column pieces
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ac42075d-de9a-451e-a7b1-67ac63c9116c
+		sourceLineageTag: pieces
+		summarizeBy: sum
+		sourceColumn: pieces
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column booking_to_dispatch_days
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 5d370598-f206-4517-8a5a-81844ae1c4a1
+		sourceLineageTag: booking_to_dispatch_days
+		summarizeBy: sum
+		sourceColumn: booking_to_dispatch_days
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column dispatch_to_pickup_hours
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 328b5b4e-6f9c-4358-9df0-daa066d07352
+		sourceLineageTag: dispatch_to_pickup_hours
+		summarizeBy: sum
+		sourceColumn: dispatch_to_pickup_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column pickup_to_delivery_hours
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: cbaf4a3e-0bda-42cb-a7f6-0749e56329cc
+		sourceLineageTag: pickup_to_delivery_hours
+		summarizeBy: sum
+		sourceColumn: pickup_to_delivery_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column booking_to_delivery_hours
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 22659ac4-a113-484a-9f64-3d607a6eb116
+		sourceLineageTag: booking_to_delivery_hours
+		summarizeBy: sum
+		sourceColumn: booking_to_delivery_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column is_timestamp_reversed
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 699ee9e3-500a-4639-89e8-0a6d38613b17
+		sourceLineageTag: is_timestamp_reversed
+		summarizeBy: none
+		sourceColumn: is_timestamp_reversed
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted_in_source
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 80e81806-3c78-410e-9c2c-28eeca4f3acb
+		sourceLineageTag: is_deleted_in_source
+		summarizeBy: none
+		sourceColumn: is_deleted_in_source
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Load = entity
+		mode: directLake
+		source
+			entityName: fact_load_lifecycle
+			schemaName: fact
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

@@ -1,0 +1,260 @@
+/// One row per maintenance record, with labor and parts cost and downtime.
+table 'Maintenance Event'
+	lineageTag: 74749e99-ccc2-42c4-822f-da626451b170
+	sourceLineageTag: [fact].[fact_maintenance]
+
+	/// Count of maintenance records. Answers MA-1.
+	measure 'Maintenance Events' = CALCULATE ( COUNTROWS ( 'Maintenance Event' ), 'Maintenance Event'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Maintenance
+		lineageTag: dd357a56-93ec-4563-8efa-cc26167b32f6
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Total maintenance labor cost.
+	measure 'Labor Cost' = CALCULATE ( SUM ( 'Maintenance Event'[labor_cost] ), 'Maintenance Event'[is_deleted_in_source] = FALSE () )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Maintenance
+		lineageTag: 0e51896e-999f-488d-9117-5f47f101f963
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Total maintenance parts cost.
+	measure 'Parts Cost' = CALCULATE ( SUM ( 'Maintenance Event'[parts_cost] ), 'Maintenance Event'[is_deleted_in_source] = FALSE () )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Maintenance
+		lineageTag: 6413961e-b397-4e36-bb5e-4603f6bfb6dd
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Labor cost plus parts cost.
+	measure 'Maintenance Cost' = [Labor Cost] + [Parts Cost]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Maintenance
+		lineageTag: f4a6c7cc-d9c1-454b-9c16-6bf38c0af8a4
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Total hours trucks were out of service for maintenance.
+	measure 'Downtime Hours' = CALCULATE ( SUM ( 'Maintenance Event'[downtime_hours] ), 'Maintenance Event'[is_deleted_in_source] = FALSE () )
+		formatString: #,0.0
+		displayFolder: Maintenance
+		lineageTag: b9354b77-3c2e-4db4-8673-a0eebb7789ab
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Maintenance cost divided by actual miles. Answers FE-2.
+	measure 'Maintenance Cost per Mile' = DIVIDE ( [Maintenance Cost], [Actual Miles] )
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		displayFolder: Asset Economics
+		lineageTag: a7a1037a-efdc-4e12-b791-5afa4ee12d89
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column maintenance_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 6cc23b6b-adb8-4b97-9f8d-e03bae466b15
+		sourceLineageTag: maintenance_date_key
+		summarizeBy: none
+		sourceColumn: maintenance_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column truck_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: b67dcdd8-6a25-4ec1-9d11-0a61ad3079c7
+		sourceLineageTag: truck_key
+		summarizeBy: none
+		sourceColumn: truck_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column location_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d53a0594-2500-458a-aae3-6435953a559a
+		sourceLineageTag: location_key
+		summarizeBy: none
+		sourceColumn: location_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column maintenance_class_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 88bd9e6c-0427-433d-9de1-3623764dfbac
+		sourceLineageTag: maintenance_class_key
+		summarizeBy: none
+		sourceColumn: maintenance_class_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column maintenance_id
+		dataType: string
+		isHidden
+		lineageTag: fd464514-8fdc-4188-befb-dcebfa645ec5
+		sourceLineageTag: maintenance_id
+		summarizeBy: none
+		sourceColumn: maintenance_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column labor_hours
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 550e2e85-38cf-4a9f-a49f-5495e1cd4195
+		sourceLineageTag: labor_hours
+		summarizeBy: sum
+		sourceColumn: labor_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column labor_cost
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 70e9cf01-2901-49d9-81be-58bb7052aaaf
+		sourceLineageTag: labor_cost
+		summarizeBy: sum
+		sourceColumn: labor_cost
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column parts_cost
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: b8c5cfc7-de77-4335-aedf-ce0433090fe8
+		sourceLineageTag: parts_cost
+		summarizeBy: sum
+		sourceColumn: parts_cost
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column downtime_hours
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 794d115d-f11d-4719-bd4b-2d1aa021a179
+		sourceLineageTag: downtime_hours
+		summarizeBy: sum
+		sourceColumn: downtime_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column odometer_reading
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 74957edc-6765-42ed-8c04-7b5bfcaa4179
+		sourceLineageTag: odometer_reading
+		summarizeBy: sum
+		sourceColumn: odometer_reading
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted_in_source
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 8a3145dd-a81f-4dae-af1c-eeb74c4cfd52
+		sourceLineageTag: is_deleted_in_source
+		summarizeBy: none
+		sourceColumn: is_deleted_in_source
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Maintenance Event' = entity
+		mode: directLake
+		source
+			entityName: fact_maintenance
+			schemaName: fact
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

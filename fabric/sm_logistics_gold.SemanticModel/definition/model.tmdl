@@ -1,0 +1,37 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 1
+
+annotation PBI_QueryOrder = ["DirectLake - wh_logistics_gold"]
+
+annotation PBI_ProTooling = ["DirectLakeOnOneLakeInWeb","WebModelingEdit","CalcGroup","DaxQueryView_Desktop"]
+
+ref table Date
+ref table Customer
+ref table 'Stop Status'
+ref table Driver
+ref table Facility
+ref table 'Incident Class'
+ref table 'Load Type'
+ref table Location
+ref table 'Maintenance Class'
+ref table Route
+ref table Trailer
+ref table Truck
+ref table 'Stop Event'
+ref table 'Fuel Purchase'
+ref table Load
+ref table 'Maintenance Event'
+ref table 'Safety Incident'
+ref table Trip
+ref table 'Arrival Variance Band'
+ref table 'Stop Date Basis'
+ref table 'Load Date Basis'
+

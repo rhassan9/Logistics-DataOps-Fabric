@@ -1,0 +1,196 @@
+/// Drivers, one row per version of their employment history (SCD Type 2). Driver ID identifies the person.
+table Driver
+	lineageTag: 4c49c0bf-07cc-466d-8002-4eaa2bc5514e
+	sourceLineageTag: [dim].[dim_driver]
+
+	column driver_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 4ea9f96f-bb8b-4f36-bf2d-5eade22e7a16
+		sourceLineageTag: driver_key
+		summarizeBy: none
+		sourceColumn: driver_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Driver ID'
+		dataType: string
+		lineageTag: 3fac701a-2714-4624-87ca-8e13749a9436
+		sourceLineageTag: driver_id
+		summarizeBy: none
+		sourceColumn: driver_id
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Driver Name'
+		dataType: string
+		lineageTag: 2590a66e-d745-4422-ab3c-5fb4bf53e151
+		sourceLineageTag: driver_name
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: driver_name
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Driver Home Terminal'
+		dataType: string
+		lineageTag: 593fc983-8df1-4a6f-adb7-cba7930c1429
+		sourceLineageTag: driver_home_terminal
+		summarizeBy: none
+		sourceColumn: driver_home_terminal
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Driver Employment Status'
+		dataType: string
+		lineageTag: eee8f122-df06-447f-b28c-bdf8eaaa4c73
+		sourceLineageTag: employment_status
+		summarizeBy: none
+		sourceColumn: employment_status
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Driver Hire Date'
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 502eea21-a47d-4941-b650-df92ad32de06
+		sourceLineageTag: driver_hire_date
+		summarizeBy: none
+		sourceColumn: driver_hire_date
+
+		changedProperty = Name
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column 'Driver Termination Date'
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 90793f83-a5a2-4230-9738-46c5ca7cd391
+		sourceLineageTag: driver_termination_date
+		summarizeBy: none
+		sourceColumn: driver_termination_date
+
+		changedProperty = Name
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column 'Driver Years of Experience'
+		dataType: int64
+		formatString: 0
+		lineageTag: a37926e1-979a-4ac6-abf6-afd7af845b88
+		sourceLineageTag: years_experience
+		summarizeBy: none
+		sourceColumn: years_experience
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column 'Driver Version'
+		dataType: string
+		lineageTag: 57e85b6c-0fb2-4def-96fe-96421e778168
+		sourceLineageTag: driver_version_label
+		summarizeBy: none
+		sourceColumn: driver_version_label
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_from_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 39c6db35-37e4-4071-bb27-eef70ad11313
+		sourceLineageTag: valid_from_date_key
+		summarizeBy: sum
+		sourceColumn: valid_from_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_to_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: f6f6c6b8-dc49-4be2-b9fc-eae0ab54f7c6
+		sourceLineageTag: valid_to_date_key
+		summarizeBy: sum
+		sourceColumn: valid_to_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_current
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 99180c6d-057c-4255-8f32-0f8005846819
+		sourceLineageTag: is_current
+		summarizeBy: none
+		sourceColumn: is_current
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: c807f915-8ef9-4b82-bba1-0882c9bdf164
+		sourceLineageTag: is_deleted
+		summarizeBy: none
+		sourceColumn: is_deleted
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column version_reason
+		dataType: string
+		isHidden
+		lineageTag: beab7482-6a2f-4c37-b8ad-88d06df6418d
+		sourceLineageTag: version_reason
+		summarizeBy: none
+		sourceColumn: version_reason
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Driver = entity
+		mode: directLake
+		source
+			entityName: dim_driver
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

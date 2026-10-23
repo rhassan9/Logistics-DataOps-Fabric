@@ -1,0 +1,217 @@
+/// Shippers who book loads, with account status and payment terms.
+table Customer
+	lineageTag: 7cdb58e9-35db-4db2-ae4b-8cc113832dce
+	sourceLineageTag: [dim].[dim_customer]
+
+	/// Average payment terms in days across the selected customers.
+	measure 'Average Credit Terms Days' =
+			
+			CALCULATE (
+			    AVERAGE ( 'Customer'[Credit Terms Days] ),
+			    'Customer'[is_current] = TRUE (),
+			    'Customer'[customer_key] > 0
+			)
+		formatString: #,0.0
+		displayFolder: Customers
+		lineageTag: 1a49ac22-8b40-4a2e-b4d1-26b86b2c310c
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column customer_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: b37f0871-eed9-4be9-ad34-7b0d49de5796
+		sourceLineageTag: customer_key
+		summarizeBy: none
+		sourceColumn: customer_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Customer ID'
+		dataType: string
+		lineageTag: 810836bc-2ac5-43af-bed3-056653f7aadc
+		sourceLineageTag: customer_id
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Customer Name'
+		dataType: string
+		lineageTag: 4409e19f-776a-4dd3-b919-212dc0aa88dd
+		sourceLineageTag: customer_name
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: customer_name
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Customer Type'
+		dataType: string
+		lineageTag: 63a2e47d-1762-40b0-ba4a-b531005508eb
+		sourceLineageTag: customer_type
+		summarizeBy: none
+		sourceColumn: customer_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Primary Freight Type'
+		dataType: string
+		lineageTag: b29e9fa3-d70f-4aa1-8672-dfebd998872e
+		sourceLineageTag: primary_freight_type
+		summarizeBy: none
+		sourceColumn: primary_freight_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Customer Account Status'
+		dataType: string
+		lineageTag: 4ec8be26-de48-4b8f-bea2-f365d1eb5b6e
+		sourceLineageTag: account_status
+		summarizeBy: none
+		sourceColumn: account_status
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Credit Terms Days'
+		dataType: int64
+		formatString: 0
+		lineageTag: f19c84fb-994a-4664-95bd-83af16384530
+		sourceLineageTag: credit_terms_days
+		summarizeBy: none
+		sourceColumn: credit_terms_days
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Contract Start Date'
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 3bf35f8f-97e5-424e-97cb-fc1aec3b2237
+		sourceLineageTag: contract_start_date
+		summarizeBy: none
+		sourceColumn: contract_start_date
+
+		changedProperty = Name
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Customer's stated potential, not booked revenue
+	column 'Annual Revenue Potential'
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: bd0256f3-c777-430b-a303-34e66aa614d1
+		sourceLineageTag: annual_revenue_potential
+		summarizeBy: none
+		sourceColumn: annual_revenue_potential
+
+		changedProperty = Name
+
+		changedProperty = Description
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column valid_from_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 146fd6ac-fd81-4773-a1fd-12ea3013113b
+		sourceLineageTag: valid_from_date_key
+		summarizeBy: none
+		sourceColumn: valid_from_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_to_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 22b69629-5058-47e4-88ed-da77162522ba
+		sourceLineageTag: valid_to_date_key
+		summarizeBy: none
+		sourceColumn: valid_to_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_current
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: a6a8524a-078d-4d58-bc27-d1caec6020b2
+		sourceLineageTag: is_current
+		summarizeBy: none
+		sourceColumn: is_current
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: e61219ec-56db-4dba-9217-dfbd276ad245
+		sourceLineageTag: is_deleted
+		summarizeBy: none
+		sourceColumn: is_deleted
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column version_reason
+		dataType: string
+		isHidden
+		lineageTag: 3d59fa8f-009c-47f8-81bf-b44c9bcd5888
+		sourceLineageTag: version_reason
+		summarizeBy: none
+		sourceColumn: version_reason
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Customer = entity
+		mode: directLake
+		source
+			entityName: dim_customer
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

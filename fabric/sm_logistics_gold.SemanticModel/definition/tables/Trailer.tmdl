@@ -1,0 +1,158 @@
+/// Trailers pulled on trips.
+table Trailer
+	lineageTag: 3682c0f4-efea-4c83-a38e-a12f1f2f8480
+	sourceLineageTag: [dim].[dim_trailer]
+
+	column trailer_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 5ecff330-9b4c-4744-a8c2-e42a27463721
+		sourceLineageTag: trailer_key
+		summarizeBy: none
+		sourceColumn: trailer_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Trailer ID'
+		dataType: string
+		lineageTag: acf5c387-952f-43b3-a816-f2647220432c
+		sourceLineageTag: trailer_id
+		summarizeBy: none
+		sourceColumn: trailer_id
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Trailer Number'
+		dataType: string
+		lineageTag: 61ff8c75-3589-46ab-a0dd-9b01dc0f0e5f
+		sourceLineageTag: trailer_number
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: trailer_number
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Trailer Type'
+		dataType: string
+		lineageTag: 2065b9c6-bd7d-4cf5-8b47-509458fdd56e
+		sourceLineageTag: trailer_type
+		summarizeBy: none
+		sourceColumn: trailer_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Trailer Model Year'
+		dataType: int64
+		formatString: 0
+		lineageTag: d8f955c6-dc59-4540-b8fc-252a337466d0
+		sourceLineageTag: trailer_model_year
+		summarizeBy: none
+		sourceColumn: trailer_model_year
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column 'Trailer Acquisition Date'
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 9fd99d78-52ce-4d2e-8eff-62e26b5148b8
+		sourceLineageTag: trailer_acquisition_date
+		summarizeBy: none
+		sourceColumn: trailer_acquisition_date
+
+		changedProperty = Name
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column valid_from_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 86823444-7738-4fcb-ba80-4d2f151b3537
+		sourceLineageTag: valid_from_date_key
+		summarizeBy: sum
+		sourceColumn: valid_from_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_to_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 7935257c-1ff5-49c3-9093-c2dbff1ccfc5
+		sourceLineageTag: valid_to_date_key
+		summarizeBy: sum
+		sourceColumn: valid_to_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_current
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 00c0f7de-9b5d-4b20-86f7-92a6304af6bc
+		sourceLineageTag: is_current
+		summarizeBy: none
+		sourceColumn: is_current
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 846aef60-b12f-4f5e-ae82-083485bcda01
+		sourceLineageTag: is_deleted
+		summarizeBy: none
+		sourceColumn: is_deleted
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column version_reason
+		dataType: string
+		isHidden
+		lineageTag: 160ea934-75e6-4804-962e-5c4b4cd57dbc
+		sourceLineageTag: version_reason
+		summarizeBy: none
+		sourceColumn: version_reason
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Trailer = entity
+		mode: directLake
+		source
+			entityName: dim_trailer
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

@@ -1,0 +1,52 @@
+/// Booking type and load type combinations that occur on loads.
+table 'Load Type'
+	lineageTag: 09b19382-f4ec-4ef0-9b0a-6768274d90ee
+	sourceLineageTag: [dim].[dim_load_type]
+
+	column load_type_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 9228bd06-8871-4500-a9d1-83c1ebb45bd0
+		sourceLineageTag: load_type_key
+		summarizeBy: none
+		sourceColumn: load_type_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Booking Type'
+		dataType: string
+		lineageTag: 63341004-bb36-478c-91fc-d962564026d9
+		sourceLineageTag: booking_type
+		summarizeBy: none
+		sourceColumn: booking_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Load Type'
+		dataType: string
+		lineageTag: cb6d0cef-3baa-4ec3-bd3e-5751b16fc776
+		sourceLineageTag: load_type
+		summarizeBy: none
+		sourceColumn: load_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Load Type' = entity
+		mode: directLake
+		source
+			entityName: dim_load_type
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

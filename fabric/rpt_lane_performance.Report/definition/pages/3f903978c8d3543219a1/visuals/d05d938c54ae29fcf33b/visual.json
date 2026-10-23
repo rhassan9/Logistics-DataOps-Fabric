@@ -1,0 +1,65 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "d05d938c54ae29fcf33b",
+  "position": {
+    "x": 55.81005586592179,
+    "y": 971.39664804469271,
+    "z": 9000,
+    "height": 70.893854748603346,
+    "width": 1797.9888268156424,
+    "tabOrder": 9000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "Contribution after fuel is not profit: the data has no driver pay, depreciation or overhead. Charges and miles are dated by dispatch, fuel by purchase date; 3.3% of fuel cost falls in a different month from its trip's dispatch, so monthly Contribution after Fuel and Fuel Cost per Mile are approximate and full-period figures are exact.",
+                    "textStyle": {
+                      "fontSize": "14pt"
+                    }
+                  }
+                ],
+                "indent": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "padding": [
+        {
+          "properties": {
+            "top": {
+              "expr": {
+                "Literal": {
+                  "Value": "11D"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

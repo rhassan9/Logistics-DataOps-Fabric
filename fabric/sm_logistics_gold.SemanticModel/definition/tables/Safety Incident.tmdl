@@ -1,0 +1,225 @@
+/// One row per safety incident, with vehicle and cargo damage cost. 170 incidents in total.
+table 'Safety Incident'
+	lineageTag: 8066be8a-77f2-489d-8046-4462289771f8
+	sourceLineageTag: [fact].[fact_safety_incident]
+
+	/// Count of safety incidents. Always show beside safety rates as the sample size. Answers SA-1.
+	measure Incidents = CALCULATE ( COUNTROWS ( 'Safety Incident' ), 'Safety Incident'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Safety
+		lineageTag: 055d55a1-b167-4f97-8e79-6052b0ef3daf
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Vehicle damage cost plus cargo damage cost.
+	measure 'Claim Cost' =
+			
+			CALCULATE (
+			    SUM ( 'Safety Incident'[vehicle_damage_cost] ) + SUM ( 'Safety Incident'[cargo_damage_cost] ),
+			    'Safety Incident'[is_deleted_in_source] = FALSE ()
+			)
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Safety
+		lineageTag: 3f7ad9b5-9eeb-41b4-b953-6ff7f2d85543
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Preventable incidents divided by incidents where preventability was recorded.
+	measure 'Preventable Rate' =
+			
+			DIVIDE (
+			    CALCULATE ( [Incidents], KEEPFILTERS ( 'Incident Class'[Incident Preventability] = "Preventable" ) ),
+			    CALCULATE ( [Incidents], KEEPFILTERS ( 'Incident Class'[Incident Preventability] <> "Not Recorded" ) )
+			)
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Safety
+		lineageTag: 040434e7-dfb4-425b-afdd-6a918cc2b6bb
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// At-fault incidents divided by incidents where fault was recorded.
+	measure 'At-Fault Rate' =
+			
+			DIVIDE (
+			    CALCULATE ( [Incidents], KEEPFILTERS ( 'Incident Class'[Incident Fault Status] = "At Fault" ) ),
+			    CALCULATE ( [Incidents], KEEPFILTERS ( 'Incident Class'[Incident Fault Status] <> "Not Recorded" ) )
+			)
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Safety
+		lineageTag: 991486c2-a92c-4c76-bee5-bec33ea21ca0
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column incident_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 03731fe7-5c46-47de-bd67-678f269fec6c
+		sourceLineageTag: incident_date_key
+		summarizeBy: none
+		sourceColumn: incident_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column driver_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: a4e7cd20-5a4b-4fca-b805-b62631a1e517
+		sourceLineageTag: driver_key
+		summarizeBy: none
+		sourceColumn: driver_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column truck_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ab633aad-86d9-4232-a5b6-bdba339ea94c
+		sourceLineageTag: truck_key
+		summarizeBy: none
+		sourceColumn: truck_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column location_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e15478b4-852c-48a2-97c8-dc81a13ceebd
+		sourceLineageTag: location_key
+		summarizeBy: none
+		sourceColumn: location_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column incident_class_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0bf935ba-421c-4a01-9285-a4bab2a0111d
+		sourceLineageTag: incident_class_key
+		summarizeBy: none
+		sourceColumn: incident_class_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column incident_id
+		dataType: string
+		isHidden
+		lineageTag: d62157ac-bfcc-45e0-8433-e43ac6afaa77
+		sourceLineageTag: incident_id
+		summarizeBy: none
+		sourceColumn: incident_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column trip_id
+		dataType: string
+		isHidden
+		lineageTag: 73efe52a-ac70-4b38-98e3-d518fbb375b3
+		sourceLineageTag: trip_id
+		summarizeBy: none
+		sourceColumn: trip_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column vehicle_damage_cost
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 56cbab95-e87f-45ad-aa49-7da3220a157a
+		sourceLineageTag: vehicle_damage_cost
+		summarizeBy: sum
+		sourceColumn: vehicle_damage_cost
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column cargo_damage_cost
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 9aec85a3-a191-417e-a0fc-d25899aced12
+		sourceLineageTag: cargo_damage_cost
+		summarizeBy: sum
+		sourceColumn: cargo_damage_cost
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column is_deleted_in_source
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: b1721f80-e0fc-46bd-88bf-6352b34de0de
+		sourceLineageTag: is_deleted_in_source
+		summarizeBy: none
+		sourceColumn: is_deleted_in_source
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Safety Incident' = entity
+		mode: directLake
+		source
+			entityName: fact_safety_incident
+			schemaName: fact
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

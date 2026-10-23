@@ -1,0 +1,279 @@
+/// One row per fuel purchase, with gallons and cost.
+table 'Fuel Purchase'
+	lineageTag: 2fb1550a-65fc-486a-858f-f1819ed362ec
+	sourceLineageTag: [fact].[fact_fuel_purchase]
+
+	/// Total amount paid for fuel purchases.
+	measure 'Fuel Cost' = CALCULATE ( SUM ( 'Fuel Purchase'[total_cost] ), 'Fuel Purchase'[is_deleted_in_source] = FALSE () )
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Fuel
+		lineageTag: 82ea441b-6e68-4538-8450-cce434484078
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Total gallons bought in fuel purchases.
+	measure 'Gallons Purchased' = CALCULATE ( SUM ( 'Fuel Purchase'[gallons] ), 'Fuel Purchase'[is_deleted_in_source] = FALSE () )
+		formatString: #,0.0
+		displayFolder: Fuel
+		lineageTag: 907b6285-f975-4348-a11e-b23b3388403e
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Fuel cost divided by gallons purchased (weighted by gallons). Answers FU-1.
+	measure 'Average Price per Gallon' = DIVIDE ( [Fuel Cost], [Gallons Purchased] )
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		displayFolder: Fuel
+		lineageTag: fb9f39be-6897-48e0-8bc3-2d2934037b3f
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Lowest price per gallon paid on any single fuel purchase.
+	measure 'Lowest Price Paid' =
+			
+			MINX (
+			    FILTER ( 'Fuel Purchase', 'Fuel Purchase'[is_deleted_in_source] = FALSE () && 'Fuel Purchase'[gallons] > 0 ),
+			    DIVIDE ( 'Fuel Purchase'[total_cost], 'Fuel Purchase'[gallons] )
+			)
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		displayFolder: Fuel
+		lineageTag: 2452fba7-b923-42a9-bf7f-9403aae7e623
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Highest price per gallon paid on any single fuel purchase.
+	measure 'Highest Price Paid' =
+			
+			MAXX (
+			    FILTER ( 'Fuel Purchase', 'Fuel Purchase'[is_deleted_in_source] = FALSE () && 'Fuel Purchase'[gallons] > 0 ),
+			    DIVIDE ( 'Fuel Purchase'[total_cost], 'Fuel Purchase'[gallons] )
+			)
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		displayFolder: Fuel
+		lineageTag: 56ab6d07-9c83-4880-9055-5da7944ac791
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	/// Fuel cost in the selected location as a share of fuel cost across all locations.
+	measure 'Share of Fuel Spend' = DIVIDE ( [Fuel Cost], CALCULATE ( [Fuel Cost], ALL ( 'Location' ) ) )
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Fuel
+		lineageTag: 2aa953f2-5dd6-4d80-b2b5-23840e5d89a1
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Fuel cost divided by actual miles.
+	measure 'Fuel Cost per Mile' = DIVIDE ( [Fuel Cost], [Actual Miles] )
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		displayFolder: Route Contribution
+		lineageTag: 4f130362-02ec-457f-893b-dd2daa836704
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column purchase_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0fa6dc4f-07d7-4166-9ff5-fbba577977e3
+		sourceLineageTag: purchase_date_key
+		summarizeBy: none
+		sourceColumn: purchase_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column truck_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: be0dc61c-fab7-4e01-aaaa-4ea7f6d0f402
+		sourceLineageTag: truck_key
+		summarizeBy: none
+		sourceColumn: truck_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column driver_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 25ef5e76-94f7-42a0-9970-52e47390dbb6
+		sourceLineageTag: driver_key
+		summarizeBy: none
+		sourceColumn: driver_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column route_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 1d03cf53-ea7a-4b55-8698-57802ac572f1
+		sourceLineageTag: route_key
+		summarizeBy: none
+		sourceColumn: route_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column location_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 056bd854-c2c6-4c91-b89d-ab98a368f192
+		sourceLineageTag: location_key
+		summarizeBy: none
+		sourceColumn: location_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column fuel_purchase_id
+		dataType: string
+		isHidden
+		lineageTag: 16a52c18-8f33-4345-bdc9-0043b4f88984
+		sourceLineageTag: fuel_purchase_id
+		summarizeBy: none
+		sourceColumn: fuel_purchase_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column trip_id
+		dataType: string
+		isHidden
+		lineageTag: ee4b12cb-1f90-4b05-8a0f-5edc28818c66
+		sourceLineageTag: trip_id
+		summarizeBy: none
+		sourceColumn: trip_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column gallons
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: ae471daa-dec8-46c3-b313-300eb882b639
+		sourceLineageTag: gallons
+		summarizeBy: sum
+		sourceColumn: gallons
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column total_cost
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 421e7f49-244b-4c62-8e8a-6895555945bb
+		sourceLineageTag: total_cost
+		summarizeBy: sum
+		sourceColumn: total_cost
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column is_capacity_exceeded
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 123eef9e-7a91-4817-8bfc-0e750525d41c
+		sourceLineageTag: is_capacity_exceeded
+		summarizeBy: none
+		sourceColumn: is_capacity_exceeded
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted_in_source
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 23c2daf1-7a2e-4754-a7ff-d374721efe79
+		sourceLineageTag: is_deleted_in_source
+		summarizeBy: none
+		sourceColumn: is_deleted_in_source
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Fuel Purchase' = entity
+		mode: directLake
+		source
+			entityName: fact_fuel_purchase
+			schemaName: fact
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

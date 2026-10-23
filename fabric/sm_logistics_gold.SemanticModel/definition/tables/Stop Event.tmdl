@@ -1,0 +1,425 @@
+/// One row per pickup or delivery stop, with appointment, arrival, arrival variance and detention.
+table 'Stop Event'
+	lineageTag: 54dd6dd2-6fc6-4f04-bd35-4a2245ffd21f
+	sourceLineageTag: [fact].[fact_delivery_event]
+
+	/// Count of delivery stops (pickups excluded). The sample size for on-time measures.
+	measure 'Delivery Events' =
+			
+			CALCULATE (
+			    COUNTROWS ( 'Stop Event' ),
+			    KEEPFILTERS ( 'Stop Status'[Stop Type] = "Delivery" ),
+			    'Stop Event'[is_deleted_in_source] = FALSE ()
+			)
+		formatString: #,0
+		displayFolder: Delivery Performance
+		lineageTag: 74350b36-e110-4657-8550-466229b18950
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Delivery stops arriving less than 120 minutes before or after the appointment, measured at full timestamp precision (the source rule).
+	measure 'On-Time Deliveries' =
+			
+			CALCULATE ( [Delivery Events], KEEPFILTERS ( 'Stop Status'[Arrival Status] = "On Time" ) )
+		formatString: #,0
+		displayFolder: Delivery Performance
+		lineageTag: f1f617fc-50ae-46f2-bd36-949516033f22
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Delivery stops arriving 120 minutes or more before the appointment.
+	measure 'Early Deliveries' =
+			
+			CALCULATE ( [Delivery Events], KEEPFILTERS ( 'Stop Status'[Arrival Status] = "Early" ) )
+		formatString: #,0
+		displayFolder: Delivery Performance
+		lineageTag: 8d5bddd7-829c-4e00-9fa0-d7e3389d022d
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Delivery stops arriving 120 minutes or more after the appointment.
+	measure 'Late Deliveries' =
+			
+			CALCULATE ( [Delivery Events], KEEPFILTERS ( 'Stop Status'[Arrival Status] = "Late" ) )
+		formatString: #,0
+		displayFolder: Delivery Performance
+		lineageTag: 32e55ba9-375f-4d90-9846-04cf17f7dddc
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// On-time deliveries divided by delivery events. Answers DP-1.
+	measure 'On-Time Rate' = DIVIDE ( [On-Time Deliveries], [Delivery Events] )
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Delivery Performance
+		lineageTag: ae105a6e-831a-483d-9751-ce65e59dcfff
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Early deliveries divided by delivery events.
+	measure 'Early Rate' = DIVIDE ( [Early Deliveries], [Delivery Events] )
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Delivery Performance
+		lineageTag: 8e546642-0329-493a-bf41-c98790cdf512
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Late deliveries divided by delivery events.
+	measure 'Late Rate' = DIVIDE ( [Late Deliveries], [Delivery Events] )
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Delivery Performance
+		lineageTag: dd601072-3169-4cc1-9d9f-dbab620e130b
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Average minutes between appointment and arrival on deliveries; negative is early, positive is late.
+	measure 'Average Arrival Variance Minutes' =
+			
+			CALCULATE (
+			    AVERAGE ( 'Stop Event'[arrival_variance_minutes] ),
+			    KEEPFILTERS ( 'Stop Status'[Stop Type] = "Delivery" ),
+			    'Stop Event'[is_deleted_in_source] = FALSE ()
+			)
+		formatString: #,0.0
+		displayFolder: Delivery Performance
+		lineageTag: f16c19c4-2173-4075-a85b-5808aa2606b1
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Count of pickup and delivery stops.
+	measure 'Stop Events' = CALCULATE ( COUNTROWS ( 'Stop Event' ), 'Stop Event'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Detention
+		lineageTag: 4b7a6d82-4891-45bb-a335-22fa47a437b2
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Average minutes a truck was held at a facility per stop. Answers DP-2.
+	measure 'Average Detention Minutes' =
+			
+			CALCULATE ( AVERAGE ( 'Stop Event'[detention_minutes] ), 'Stop Event'[is_deleted_in_source] = FALSE () )
+		formatString: #,0.0
+		displayFolder: Detention
+		lineageTag: 29c0805d-113a-4341-9aa0-2b3c2fb2d92e
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Detention minutes beyond the 120-minute free period.
+	measure 'Billable Detention Minutes' =
+			
+			CALCULATE ( SUM ( 'Stop Event'[billable_detention_minutes] ), 'Stop Event'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Detention
+		lineageTag: 7d6c4253-5e42-476d-976a-aebf27cf9328
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Stops where detention exceeded the 120-minute free period.
+	measure 'Stops over Free Time' =
+			
+			CALCULATE ( [Stop Events], KEEPFILTERS ( 'Stop Event'[billable_detention_minutes] > 0 ) )
+		formatString: #,0
+		displayFolder: Detention
+		lineageTag: 476fb97a-ffe1-49c6-809b-462f74fc51d9
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Stops with any detention as a share of all stops.
+	measure 'Share of Stops with Detention' =
+			
+			DIVIDE ( CALCULATE ( [Stop Events], KEEPFILTERS ( 'Stop Event'[detention_minutes] > 0 ) ), [Stop Events] )
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Detention
+		lineageTag: 841d173b-8186-49c3-9ebe-acea330b860c
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column scheduled_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0fccb22d-e045-4640-8eb7-322a19f863e1
+		sourceLineageTag: scheduled_date_key
+		summarizeBy: none
+		sourceColumn: scheduled_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ad32e478-1916-4fd7-b702-1d7b84cd8705
+		sourceLineageTag: actual_date_key
+		summarizeBy: sum
+		sourceColumn: actual_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column facility_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d19d08f2-0530-4ed8-845f-475a800ac22b
+		sourceLineageTag: facility_key
+		summarizeBy: none
+		sourceColumn: facility_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column route_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: f50da7de-3943-4936-a743-6a1d4f1c1edf
+		sourceLineageTag: route_key
+		summarizeBy: none
+		sourceColumn: route_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column delivery_status_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 654f9ccd-d329-47ef-b11c-52968fd409d2
+		sourceLineageTag: delivery_status_key
+		summarizeBy: none
+		sourceColumn: delivery_status_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column event_id
+		dataType: string
+		isHidden
+		lineageTag: b4265ea1-e434-4826-b83d-54b45373c8f0
+		sourceLineageTag: event_id
+		summarizeBy: none
+		sourceColumn: event_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column load_id
+		dataType: string
+		isHidden
+		lineageTag: 5ba5dc64-1801-42d0-b5e0-28544e35ed9b
+		sourceLineageTag: load_id
+		summarizeBy: none
+		sourceColumn: load_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column trip_id
+		dataType: string
+		isHidden
+		lineageTag: ab21b548-7895-4012-ba1d-b09fab659a67
+		sourceLineageTag: trip_id
+		summarizeBy: none
+		sourceColumn: trip_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column scheduled_datetime
+		dataType: dateTime
+		isHidden
+		formatString: yyyy-mm-dd
+		lineageTag: 65ad768a-13bf-4ff3-a385-9a11ab1534b2
+		sourceLineageTag: scheduled_datetime
+		summarizeBy: none
+		sourceColumn: scheduled_datetime
+
+		changedProperty = IsHidden
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column actual_datetime
+		dataType: dateTime
+		isHidden
+		formatString: yyyy-mm-dd
+		lineageTag: 6f99eb0a-eb0b-4009-9843-d61a76ce8365
+		sourceLineageTag: actual_datetime
+		summarizeBy: none
+		sourceColumn: actual_datetime
+
+		changedProperty = IsHidden
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column detention_minutes
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: bc1fa3b6-cb80-488a-b312-a0c6c6371fa6
+		sourceLineageTag: detention_minutes
+		summarizeBy: sum
+		sourceColumn: detention_minutes
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column billable_detention_minutes
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 9ed26c24-c227-4c81-8555-b6addd80de67
+		sourceLineageTag: billable_detention_minutes
+		summarizeBy: sum
+		sourceColumn: billable_detention_minutes
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column arrival_variance_minutes
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 5ed3eeb2-5185-4b8c-ac36-5d95cd6e2573
+		sourceLineageTag: arrival_variance_minutes
+		summarizeBy: sum
+		sourceColumn: arrival_variance_minutes
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column is_deleted_in_source
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 37c4ad5b-011d-4153-98b3-afe52800e352
+		sourceLineageTag: is_deleted_in_source
+		summarizeBy: none
+		sourceColumn: is_deleted_in_source
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Stop Event' = entity
+		mode: directLake
+		source
+			entityName: fact_delivery_event
+			schemaName: fact
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

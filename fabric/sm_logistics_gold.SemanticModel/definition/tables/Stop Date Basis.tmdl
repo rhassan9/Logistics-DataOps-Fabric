@@ -1,0 +1,33 @@
+/// Switches stop measures between scheduled date (default) and actual arrival date.
+table 'Stop Date Basis'
+	lineageTag: 0bb38dac-7cbe-4928-a57b-7ec9f89919c7
+
+	calculationGroup
+		precedence: 10
+
+		calculationItem 'Scheduled Date' = SELECTEDMEASURE()
+
+		calculationItem 'Actual Date' = CALCULATE ( SELECTEDMEASURE (), USERELATIONSHIP ( 'Stop Event'[actual_date_key], 'Date'[date_key] ) )
+
+	column 'Stop Date Basis'
+		dataType: string
+		lineageTag: 6d42fba2-fe66-42ad-a2ea-114c605cbdc5
+		summarizeBy: none
+		sourceColumn: Name
+		sortByColumn: Ordinal
+
+		annotation SummarizationSetBy = Automatic
+
+	column Ordinal
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 4f8fd7c9-66b9-47d2-acc6-639b9b289ee1
+		summarizeBy: sum
+		sourceColumn: Ordinal
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Stop Date Basis' = calculationGroup
+		mode: import
+

@@ -1,0 +1,55 @@
+/// Stop type (Pickup or Delivery) and arrival status (Early, On Time, Late) combinations.
+table 'Stop Status'
+	lineageTag: 83ee917c-01f1-46dc-93b4-5c09a8a236d0
+	sourceLineageTag: [dim].[dim_delivery_status]
+
+	column delivery_status_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 3c72562c-3fc3-4836-b570-8623333605c0
+		sourceLineageTag: delivery_status_key
+		summarizeBy: none
+		sourceColumn: delivery_status_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Stop Type'
+		dataType: string
+		lineageTag: d7b7a4ff-b74a-4f3d-af81-9c42e62d37ec
+		sourceLineageTag: event_type
+		summarizeBy: none
+		sourceColumn: event_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Early, On Time or Late: on time is less than 120 minutes from the appointment
+	column 'Arrival Status'
+		dataType: string
+		lineageTag: 90cbdbe0-3735-4b1b-a8f9-fa80349c000d
+		sourceLineageTag: arrival_status
+		summarizeBy: none
+		sourceColumn: arrival_status
+
+		changedProperty = Name
+
+		changedProperty = Description
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Stop Status' = entity
+		mode: directLake
+		source
+			entityName: dim_delivery_status
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

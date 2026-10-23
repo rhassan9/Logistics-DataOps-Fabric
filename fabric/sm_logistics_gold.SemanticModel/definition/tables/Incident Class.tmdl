@@ -1,0 +1,107 @@
+/// Incident type, category, severity, cause and the preventable, fault and injury flags.
+table 'Incident Class'
+	lineageTag: 0020b420-18e6-48a5-8d93-398c649ea84b
+	sourceLineageTag: [dim].[dim_incident_class]
+
+	column incident_class_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: ae8f4a9b-81bb-41a3-88a6-00ceab45a889
+		sourceLineageTag: incident_class_key
+		summarizeBy: none
+		sourceColumn: incident_class_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Incident Type'
+		dataType: string
+		lineageTag: a89643ab-4f7d-4538-a4bd-7d7d619f6f19
+		sourceLineageTag: incident_type
+		summarizeBy: none
+		sourceColumn: incident_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Incident Category'
+		dataType: string
+		lineageTag: ed0d6eee-d513-4c4d-b058-964252d9a490
+		sourceLineageTag: incident_category
+		summarizeBy: none
+		sourceColumn: incident_category
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Incident Severity'
+		dataType: string
+		lineageTag: 16597bba-71bf-4554-b5f5-28923a51309e
+		sourceLineageTag: incident_severity
+		summarizeBy: none
+		sourceColumn: incident_severity
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Incident Cause'
+		dataType: string
+		lineageTag: 82a06afe-89bb-4773-9d8f-fecca7cea005
+		sourceLineageTag: incident_cause
+		summarizeBy: none
+		sourceColumn: incident_cause
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Incident Preventability'
+		dataType: string
+		lineageTag: dd09ac80-422b-43c6-837d-d27659876dc7
+		sourceLineageTag: preventable_status
+		summarizeBy: none
+		sourceColumn: preventable_status
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Incident Fault Status'
+		dataType: string
+		lineageTag: fb230ac9-3784-4ea1-aaec-4d5302cb4e98
+		sourceLineageTag: at_fault_status
+		summarizeBy: none
+		sourceColumn: at_fault_status
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Incident Injury Status'
+		dataType: string
+		lineageTag: 704f142a-15e0-46fd-ade4-802dec853b0e
+		sourceLineageTag: injury_status
+		summarizeBy: none
+		sourceColumn: injury_status
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Incident Class' = entity
+		mode: directLake
+		source
+			entityName: dim_incident_class
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

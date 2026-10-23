@@ -1,3 +1,7 @@
+-- =====================================================================
+-- After dim_date is generated, dim_calendar is rebuilt from it in the
+-- same transaction and proved to be a valid date table (THROW 50106 otherwise).
+-- =====================================================================
 CREATE   PROCEDURE dim.usp_load_dim_date
     @start_date             DATE,
     @end_date               DATE,
@@ -7,6 +11,7 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @day_count INT, @row_count INT, @distinct_keys INT;
+    DECLARE @cal_rows INT, @cal_dates INT, @cal_min DATE, @cal_max DATE, @cal_bad_keys INT;
 
     IF @start_date IS NULL OR @end_date IS NULL OR @complete_through_date IS NULL
         THROW 50101, 'dim.usp_load_dim_date: all three parameters are required.', 1;
@@ -86,6 +91,35 @@ BEGIN
 
         IF @row_count <> @day_count + 3 OR @distinct_keys <> @row_count
             THROW 50105, 'dim.usp_load_dim_date: row or key uniqueness check failed.', 1;
+
+        -- The semantic model's date table: dim_date without the special rows.
+        -- One definition: it is copied from the rows just generated, never derived twice.
+        DELETE FROM dim.dim_calendar;
+
+        INSERT INTO dim.dim_calendar
+            (date_key, full_date, calendar_year, quarter_number, quarter_label, month_number,
+             month_name, year_month_number, year_month_label, day_of_month, is_complete_month)
+        SELECT dd.date_key, dd.full_date, dd.calendar_year, dd.quarter_number, dd.quarter_label,
+               dd.month_number, dd.month_name, dd.year_month_number, dd.year_month_label,
+               dd.day_of_month, dd.is_complete_month
+        FROM dim.dim_date AS dd
+        WHERE dd.date_key > 0;
+
+        -- Marked date table rules: unique, no blanks, no missing dates, full years.
+        -- Web modeling does not validate the marked column, so this check does.
+        SELECT @cal_rows     = COUNT(*),
+               @cal_dates    = COUNT(DISTINCT dc.full_date),
+               @cal_min      = MIN(dc.full_date),
+               @cal_max      = MAX(dc.full_date),
+               @cal_bad_keys = SUM(CASE WHEN dc.date_key <> YEAR(dc.full_date) * 10000
+                                                          + MONTH(dc.full_date) * 100
+                                                          + DAY(dc.full_date)
+                                        THEN 1 ELSE 0 END)
+        FROM dim.dim_calendar AS dc;
+
+        IF @cal_rows <> @day_count OR @cal_dates <> @cal_rows
+           OR @cal_min <> @start_date OR @cal_max <> @end_date OR @cal_bad_keys <> 0
+            THROW 50106, 'dim.usp_load_dim_date: dim_calendar is not a valid date table (count, uniqueness, range or key).', 1;
 
         COMMIT TRANSACTION;
     END TRY

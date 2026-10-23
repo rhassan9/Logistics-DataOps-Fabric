@@ -1,0 +1,172 @@
+/// Calendar from 1 Jan 2022 to 31 Dec 2025, one row per day. Use Is Complete Month to exclude partial months from trends; data ends in early January 2025.
+table Date
+	lineageTag: d8e0f373-fe3f-4e35-b65c-c8afff7610de
+	sourceLineageTag: [dim].[dim_calendar]
+	dataCategory: Time
+
+	column date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 390e3d6c-28bd-425f-9e62-4ffe6f26694d
+		sourceLineageTag: date_key
+		summarizeBy: none
+		sourceColumn: date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Date
+		dataType: dateTime
+		isKey
+		formatString: yyyy-mm-dd
+		lineageTag: 8fd53a54-bf67-480a-b09a-8edf8e284d3e
+		sourceLineageTag: full_date
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: full_date
+
+		changedProperty = Name
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column Year
+		dataType: int64
+		formatString: 0
+		lineageTag: 48f581e2-8ad5-42d1-a2e9-7759d54d23ec
+		sourceLineageTag: calendar_year
+		summarizeBy: none
+		sourceColumn: calendar_year
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column quarter_number
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: d8db7cfa-2517-4891-ab81-3febe100174d
+		sourceLineageTag: quarter_number
+		summarizeBy: sum
+		sourceColumn: quarter_number
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Quarter
+		dataType: string
+		lineageTag: 78555737-49f7-4a6b-9926-0208743db833
+		sourceLineageTag: quarter_label
+		summarizeBy: none
+		sourceColumn: quarter_label
+		sortByColumn: quarter_number
+
+		changedProperty = SortByColumn
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column month_number
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 8be63604-f3ad-4f01-ae5e-77f34e5db068
+		sourceLineageTag: month_number
+		summarizeBy: sum
+		sourceColumn: month_number
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Month
+		dataType: string
+		lineageTag: a1d0c2ae-b21c-4724-9713-2e2f403c9cd1
+		sourceLineageTag: month_name
+		summarizeBy: none
+		sourceColumn: month_name
+		sortByColumn: month_number
+
+		changedProperty = SortByColumn
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column year_month_number
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 40fce967-05e4-4618-961b-48b3402deb24
+		sourceLineageTag: year_month_number
+		summarizeBy: sum
+		sourceColumn: year_month_number
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Year Month'
+		dataType: string
+		lineageTag: 94cfc899-9d60-44a1-8886-a759d94c9a6f
+		sourceLineageTag: year_month_label
+		summarizeBy: none
+		sourceColumn: year_month_label
+		sortByColumn: year_month_number
+
+		changedProperty = SortByColumn
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Day of Month'
+		dataType: int64
+		formatString: 0
+		lineageTag: 747e8f5d-fae6-4d99-9e71-1257380579f9
+		sourceLineageTag: day_of_month
+		summarizeBy: none
+		sourceColumn: day_of_month
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	/// True when the whole month lies within the loaded data
+	column 'Is Complete Month'
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: ea904f94-e08e-408e-972d-a4b971d506e8
+		sourceLineageTag: is_complete_month
+		summarizeBy: none
+		sourceColumn: is_complete_month
+
+		changedProperty = Name
+
+		changedProperty = Description
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Date = entity
+		mode: directLake
+		source
+			entityName: dim_calendar
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

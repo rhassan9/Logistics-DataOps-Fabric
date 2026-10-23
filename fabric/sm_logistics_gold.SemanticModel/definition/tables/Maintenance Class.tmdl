@@ -1,0 +1,52 @@
+/// Maintenance type and service urgency combinations.
+table 'Maintenance Class'
+	lineageTag: 304ffc66-b806-4ef1-8e58-aa82d1d05b16
+	sourceLineageTag: [dim].[dim_maintenance_class]
+
+	column maintenance_class_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 3f4b465b-3547-42f7-8755-8fcd8ac1122e
+		sourceLineageTag: maintenance_class_key
+		summarizeBy: none
+		sourceColumn: maintenance_class_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Maintenance Type'
+		dataType: string
+		lineageTag: 7e6ba9fe-abfe-4497-a703-18efae50795a
+		sourceLineageTag: maintenance_type
+		summarizeBy: none
+		sourceColumn: maintenance_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Service Urgency'
+		dataType: string
+		lineageTag: 59828830-5550-4508-bc47-7f80b6a007e0
+		sourceLineageTag: service_urgency
+		summarizeBy: none
+		sourceColumn: service_urgency
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Maintenance Class' = entity
+		mode: directLake
+		source
+			entityName: dim_maintenance_class
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

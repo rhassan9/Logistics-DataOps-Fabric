@@ -1,0 +1,219 @@
+/// Tractor units, one row per version of status and home terminal (SCD Type 2). Truck ID identifies the truck.
+table Truck
+	lineageTag: a1d7e0ab-43cc-4f96-92b1-4124599d0ad0
+	sourceLineageTag: [dim].[dim_truck]
+
+	column truck_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: c08338b4-e2f4-4e4d-8216-0aa398ba1ca1
+		sourceLineageTag: truck_key
+		summarizeBy: none
+		sourceColumn: truck_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Truck ID'
+		dataType: string
+		lineageTag: 61373599-c633-4e69-8c0c-bc53b716cbe4
+		sourceLineageTag: truck_id
+		summarizeBy: none
+		sourceColumn: truck_id
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Truck Unit Number'
+		dataType: string
+		lineageTag: c734e647-7dd9-4a49-846a-36446a48767c
+		sourceLineageTag: unit_number
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: unit_number
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Truck Make'
+		dataType: string
+		lineageTag: addc43d1-a238-4b53-965d-add3f4f92ca0
+		sourceLineageTag: truck_make
+		summarizeBy: none
+		sourceColumn: truck_make
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Truck Status'
+		dataType: string
+		lineageTag: afc962f8-e2c8-4602-9a20-4650eb7ee076
+		sourceLineageTag: truck_status
+		summarizeBy: none
+		sourceColumn: truck_status
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Truck Home Terminal'
+		dataType: string
+		lineageTag: 11ad54a3-0e55-4034-8c36-8b95fbe2b681
+		sourceLineageTag: truck_home_terminal
+		summarizeBy: none
+		sourceColumn: truck_home_terminal
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Truck Model Year'
+		dataType: int64
+		formatString: 0
+		lineageTag: 23ab1fdb-7bbc-4ed7-95fe-13c1670eb229
+		sourceLineageTag: truck_model_year
+		summarizeBy: none
+		sourceColumn: truck_model_year
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column 'Truck Acquisition Date'
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 4f5a0cde-ada3-4b32-9db0-26a14a2dc7b6
+		sourceLineageTag: truck_acquisition_date
+		summarizeBy: none
+		sourceColumn: truck_acquisition_date
+
+		changedProperty = Name
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column 'Truck Acquisition Mileage'
+		dataType: int64
+		formatString: 0
+		lineageTag: 442344cf-7e16-4246-a133-24ce3be96033
+		sourceLineageTag: acquisition_mileage
+		summarizeBy: none
+		sourceColumn: acquisition_mileage
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column 'Truck Tank Capacity Gallons'
+		dataType: int64
+		formatString: 0
+		lineageTag: 9c3b8da6-5104-45f0-ab2f-afc4522d56ee
+		sourceLineageTag: tank_capacity_gallons
+		summarizeBy: none
+		sourceColumn: tank_capacity_gallons
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column 'Truck Version'
+		dataType: string
+		lineageTag: 1746685d-fda4-4258-813a-7951220db8d9
+		sourceLineageTag: truck_version_label
+		summarizeBy: none
+		sourceColumn: truck_version_label
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_from_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ca922213-3137-4155-97df-1a14e80cdd75
+		sourceLineageTag: valid_from_date_key
+		summarizeBy: sum
+		sourceColumn: valid_from_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_to_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e59b6956-3235-4f6c-a85d-7b798c04dc64
+		sourceLineageTag: valid_to_date_key
+		summarizeBy: sum
+		sourceColumn: valid_to_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_current
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 1070d179-2a3f-4547-8939-a9a9a92c57a2
+		sourceLineageTag: is_current
+		summarizeBy: none
+		sourceColumn: is_current
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: d7701bd2-c02b-4389-a0da-3d055b25a30d
+		sourceLineageTag: is_deleted
+		summarizeBy: none
+		sourceColumn: is_deleted
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column version_reason
+		dataType: string
+		isHidden
+		lineageTag: 0ee893f5-a98b-413b-9dee-b7497db2f998
+		sourceLineageTag: version_reason
+		summarizeBy: none
+		sourceColumn: version_reason
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Truck = entity
+		mode: directLake
+		source
+			entityName: dim_truck
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

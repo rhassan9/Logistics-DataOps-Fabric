@@ -1,0 +1,347 @@
+/// One row per trip, an execution attempt of a load. Holds miles, duration, fuel used and idle time.
+table Trip
+	lineageTag: ac3073a6-a395-4abe-be0f-1404f81e5fcf
+	sourceLineageTag: [fact].[fact_trip]
+
+	/// Count of trips, one per execution attempt of a load. Excludes trips deleted at the source.
+	measure Trips = CALCULATE ( COUNTROWS ( 'Trip' ), 'Trip'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Utilization
+		lineageTag: 27d17355-2f22-414b-9f73-50b4283386fa
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Total distance driven on trips, in miles.
+	measure 'Actual Miles' = CALCULATE ( SUM ( 'Trip'[actual_distance_miles] ), 'Trip'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Route Contribution
+		lineageTag: 153217c5-847f-4274-9b5a-ab55f3bff279
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Fuel consumed on trips, in gallons, as recorded on each trip.
+	measure 'Trip Fuel Gallons' = CALCULATE ( SUM ( 'Trip'[fuel_gallons_used] ), 'Trip'[is_deleted_in_source] = FALSE () )
+		formatString: #,0.0
+		displayFolder: Utilization
+		lineageTag: 292e2ba0-2f9b-4db7-8c5f-e2c790e3742b
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Total engine idle hours on trips. Valid as a total, not as a share of trip duration.
+	measure 'Idle Hours' = CALCULATE ( SUM ( 'Trip'[idle_time_hours] ), 'Trip'[is_deleted_in_source] = FALSE () )
+		formatString: #,0.0
+		displayFolder: Utilization
+		lineageTag: 3fbadf05-f8d9-423d-93f9-58ca131440c0
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Number of distinct days with at least one trip dispatched.
+	measure 'Active Days' = CALCULATE ( DISTINCTCOUNT ( 'Trip'[dispatch_date_key] ), 'Trip'[is_deleted_in_source] = FALSE () )
+		formatString: #,0
+		displayFolder: Utilization
+		lineageTag: a1c27bd6-78b8-45f1-9c40-38e858127089
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Trucks with at least one trip in the selection, each counted once regardless of version.
+	measure 'Active Trucks' =
+			
+			CALCULATE (
+			    DISTINCTCOUNT ( 'Truck'[Truck ID] ),
+			    CALCULATETABLE ( 'Trip', 'Trip'[is_deleted_in_source] = FALSE () ),
+			    'Truck'[truck_key] > 0
+			)
+		formatString: #,0
+		displayFolder: Utilization
+		lineageTag: 6b765848-cb36-4085-b64d-a0425d9f7323
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Drivers with at least one trip in the selection, each counted once regardless of version.
+	measure 'Active Drivers' =
+			
+			CALCULATE (
+			    DISTINCTCOUNT ( 'Driver'[Driver ID] ),
+			    CALCULATETABLE ( 'Trip', 'Trip'[is_deleted_in_source] = FALSE () ),
+			    'Driver'[driver_key] > 0
+			)
+		formatString: #,0
+		displayFolder: Utilization
+		lineageTag: ae1814d8-cef2-4e4c-9ce1-0c1ab13f1d96
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	/// Active drivers divided by active trucks. Answers UT-1.
+	measure 'Drivers per Truck' = DIVIDE ( [Active Drivers], [Active Trucks] )
+		formatString: #,0.0
+		displayFolder: Utilization
+		lineageTag: ece84a1d-8691-4fbb-967b-4c17d66ac794
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Trips divided by active trucks. Answers UT-1.
+	measure 'Trips per Active Truck' = DIVIDE ( [Trips], [Active Trucks] )
+		formatString: #,0.0
+		displayFolder: Utilization
+		lineageTag: f3cecf66-856d-490e-80b1-82b2189b6102
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Trip fuel gallons divided by actual miles. Fleet and truck level only; blank when filtered by driver because per-driver fuel efficiency isn't supported by the data.
+	measure 'Gallons per Mile' =
+			
+			IF ( ISFILTERED ( 'Driver' ), BLANK (), DIVIDE ( [Trip Fuel Gallons], [Actual Miles] ) )
+		formatString: 0.000
+		displayFolder: Utilization
+		lineageTag: e0f543e9-c383-42c9-a231-0c2cf4331cbe
+
+		changedProperty = Name
+
+		changedProperty = DisplayFolder
+
+		changedProperty = FormatString
+
+		changedProperty = Description
+
+	column dispatch_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: fc160999-f3df-489b-8f0b-c836fcd9253e
+		sourceLineageTag: dispatch_date_key
+		summarizeBy: none
+		sourceColumn: dispatch_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column driver_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 40f70096-834c-4def-8c20-69d9565fb375
+		sourceLineageTag: driver_key
+		summarizeBy: none
+		sourceColumn: driver_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column truck_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: fd2d4a04-8871-4781-9df6-d5329e8f47cd
+		sourceLineageTag: truck_key
+		summarizeBy: none
+		sourceColumn: truck_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column trailer_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2f703b0a-fb6d-46e5-b1f4-3ff29fe41c32
+		sourceLineageTag: trailer_key
+		summarizeBy: none
+		sourceColumn: trailer_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column route_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0fce52b1-fb63-4490-b928-15d29657c8c2
+		sourceLineageTag: route_key
+		summarizeBy: none
+		sourceColumn: route_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column trip_id
+		dataType: string
+		isHidden
+		lineageTag: 9ddba5c6-f055-4220-8152-77fb1ec26220
+		sourceLineageTag: trip_id
+		summarizeBy: none
+		sourceColumn: trip_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column load_id
+		dataType: string
+		isHidden
+		lineageTag: a1befdef-3107-467a-8302-7a11e1e5f52f
+		sourceLineageTag: load_id
+		summarizeBy: none
+		sourceColumn: load_id
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_distance_miles
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 54939af6-6e8b-4037-9ab4-d7a68ddfe34d
+		sourceLineageTag: actual_distance_miles
+		summarizeBy: sum
+		sourceColumn: actual_distance_miles
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_duration_hours
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 0707882b-afa3-4cb2-abf1-0a73a5e51769
+		sourceLineageTag: actual_duration_hours
+		summarizeBy: sum
+		sourceColumn: actual_duration_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column fuel_gallons_used
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: df72664e-0024-4243-bb0c-85c81bee5e3c
+		sourceLineageTag: fuel_gallons_used
+		summarizeBy: sum
+		sourceColumn: fuel_gallons_used
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column idle_time_hours
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 359e3bef-e2b8-4370-b92f-e9884d3fedb9
+		sourceLineageTag: idle_time_hours
+		summarizeBy: sum
+		sourceColumn: idle_time_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column is_idle_implausible
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 1e74103c-4c3b-41b3-b2a9-d915d0ca22f5
+		sourceLineageTag: is_idle_implausible
+		summarizeBy: none
+		sourceColumn: is_idle_implausible
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted_in_source
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 9d6f96a0-33d4-4d14-9f17-90029a9b57ba
+		sourceLineageTag: is_deleted_in_source
+		summarizeBy: none
+		sourceColumn: is_deleted_in_source
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Trip = entity
+		mode: directLake
+		source
+			entityName: fact_trip
+			schemaName: fact
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

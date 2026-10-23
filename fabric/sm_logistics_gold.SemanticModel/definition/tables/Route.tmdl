@@ -1,0 +1,256 @@
+/// Lanes: 58 origin to destination city pairs. Lane and route mean the same thing.
+table Route
+	lineageTag: 8ebeec3d-6a7b-4f7b-b5bc-bbe03310343f
+	sourceLineageTag: [dim].[dim_route]
+
+	column route_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 0292651a-a378-4455-bb2c-04b12a22e3ab
+		sourceLineageTag: route_key
+		summarizeBy: none
+		sourceColumn: route_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Route ID'
+		dataType: string
+		lineageTag: 0013113a-b086-4ca9-b9ae-9e02f699cd21
+		sourceLineageTag: route_id
+		summarizeBy: none
+		sourceColumn: route_id
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Origin to destination, for example Atlanta → Chicago
+	column Lane
+		dataType: string
+		lineageTag: 16640343-3532-4162-b6c1-d5fe9eac7bf8
+		sourceLineageTag: route_name
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: route_name
+
+		changedProperty = Name
+
+		changedProperty = Description
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Origin City'
+		dataType: string
+		lineageTag: f2881631-d697-484a-a873-2c936032be0b
+		sourceLineageTag: origin_city
+		dataCategory: City
+		summarizeBy: none
+		sourceColumn: origin_city
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Origin State Code'
+		dataType: string
+		lineageTag: 7f696cd4-8ce7-485d-9254-f53265bcde14
+		sourceLineageTag: origin_state_code
+		summarizeBy: none
+		sourceColumn: origin_state_code
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Origin State'
+		dataType: string
+		lineageTag: 24feb3e1-d4df-4da8-9d57-6e9ac9f3b680
+		sourceLineageTag: origin_state_name
+		dataCategory: StateOrProvince
+		summarizeBy: none
+		sourceColumn: origin_state_name
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Destination City'
+		dataType: string
+		lineageTag: 6ec5626d-e02a-4455-a6b2-58d23b6c1b7b
+		sourceLineageTag: destination_city
+		dataCategory: City
+		summarizeBy: none
+		sourceColumn: destination_city
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Destination State Code'
+		dataType: string
+		lineageTag: da826277-793b-4f3b-96ee-6dc2c86f841f
+		sourceLineageTag: destination_state_code
+		summarizeBy: none
+		sourceColumn: destination_state_code
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Destination State'
+		dataType: string
+		lineageTag: 39cc2b09-a2e5-4289-a549-1e1ceb7b73e8
+		sourceLineageTag: destination_state_name
+		dataCategory: StateOrProvince
+		summarizeBy: none
+		sourceColumn: destination_state_name
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Typical Lane Distance Miles'
+		dataType: int64
+		formatString: 0
+		lineageTag: af9d6d9a-c42a-4719-a33c-53c3bc4b3701
+		sourceLineageTag: typical_distance_miles
+		summarizeBy: none
+		sourceColumn: typical_distance_miles
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column base_rate_per_mile
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: b7f8f5a1-d76a-4e8d-b245-e1a6bbcfe99c
+		sourceLineageTag: base_rate_per_mile
+		summarizeBy: sum
+		sourceColumn: base_rate_per_mile
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column fuel_surcharge_rate
+		dataType: decimal
+		isHidden
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 31efa1af-b047-4639-aecc-b5f9d8025c09
+		sourceLineageTag: fuel_surcharge_rate
+		summarizeBy: sum
+		sourceColumn: fuel_surcharge_rate
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Typical Lane Transit Days'
+		dataType: int64
+		formatString: 0
+		lineageTag: 84ff3ca4-ff76-4c86-a64c-8a84b4984026
+		sourceLineageTag: typical_transit_days
+		summarizeBy: none
+		sourceColumn: typical_transit_days
+
+		changedProperty = Name
+
+		changedProperty = SummarizeBy
+
+		annotation SummarizationSetBy = User
+
+	column valid_from_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 7e2f58e0-64f3-4941-a0b4-dae5ef16dda6
+		sourceLineageTag: valid_from_date_key
+		summarizeBy: sum
+		sourceColumn: valid_from_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_to_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 59a98574-9512-4b0c-bb82-cd08d1df362e
+		sourceLineageTag: valid_to_date_key
+		summarizeBy: sum
+		sourceColumn: valid_to_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_current
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: aa9571c0-6725-493d-921e-7ffad1f3f805
+		sourceLineageTag: is_current
+		summarizeBy: none
+		sourceColumn: is_current
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 14da2237-b352-44dd-9e8f-a9a435ddac53
+		sourceLineageTag: is_deleted
+		summarizeBy: none
+		sourceColumn: is_deleted
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column version_reason
+		dataType: string
+		isHidden
+		lineageTag: 3df73ad7-91d8-4efd-97e3-458fd25c2d58
+		sourceLineageTag: version_reason
+		summarizeBy: none
+		sourceColumn: version_reason
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Route = entity
+		mode: directLake
+		source
+			entityName: dim_route
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

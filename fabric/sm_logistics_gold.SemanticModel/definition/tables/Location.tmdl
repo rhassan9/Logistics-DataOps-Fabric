@@ -1,0 +1,96 @@
+/// City where a fuel purchase, maintenance event or safety incident took place. Not the delivery facility.
+table Location
+	lineageTag: 6aa0cd1c-2e59-4e38-884c-bdcfebe6a7a8
+	sourceLineageTag: [dim].[dim_location]
+
+	column location_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 7c1024bc-5252-4e7c-b38b-f7c6d7e6544b
+		sourceLineageTag: location_key
+		summarizeBy: none
+		sourceColumn: location_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Location City'
+		dataType: string
+		lineageTag: 95c0259f-488a-4c0f-b8ef-ce0aedbe7855
+		sourceLineageTag: location_city
+		dataCategory: City
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: location_city
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Location State Code'
+		dataType: string
+		lineageTag: 1a5bf2ac-02a1-498e-9e49-3d8f13eae944
+		sourceLineageTag: location_state_code
+		summarizeBy: none
+		sourceColumn: location_state_code
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Location State'
+		dataType: string
+		lineageTag: 19ab49a0-851d-4176-aefe-4fc08bf2f66b
+		sourceLineageTag: location_state_name
+		dataCategory: StateOrProvince
+		summarizeBy: none
+		sourceColumn: location_state_name
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Location Country'
+		dataType: string
+		lineageTag: 3cec042c-0b45-4163-a196-97dc5336b97a
+		sourceLineageTag: location_country
+		dataCategory: Country
+		summarizeBy: none
+		sourceColumn: location_country
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column state_source
+		dataType: string
+		isHidden
+		lineageTag: 184bdf2d-9399-4f10-8835-b27bc69382cc
+		sourceLineageTag: state_source
+		summarizeBy: none
+		sourceColumn: state_source
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Location = entity
+		mode: directLake
+		source
+			entityName: dim_location
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

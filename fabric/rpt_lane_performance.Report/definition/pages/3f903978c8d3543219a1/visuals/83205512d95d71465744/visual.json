@@ -1,0 +1,448 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "83205512d95d71465744",
+  "position": {
+    "x": 55.119617224880379,
+    "y": 352.76555023923441,
+    "z": 7000,
+    "height": 606.31578947368416,
+    "width": 1135.4641148325359,
+    "tabOrder": 7000
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Route"
+                    }
+                  },
+                  "Property": "Lane"
+                }
+              },
+              "queryRef": "Route.Lane",
+              "nativeQueryRef": "Lane"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Load"
+                    }
+                  },
+                  "Property": "Loads"
+                }
+              },
+              "queryRef": "Load.Loads",
+              "nativeQueryRef": "Loads"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Load"
+                    }
+                  },
+                  "Property": "Line-Haul Revenue"
+                }
+              },
+              "queryRef": "Load.Line-Haul Revenue",
+              "nativeQueryRef": "Line-Haul Revenue"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Load"
+                    }
+                  },
+                  "Property": "Fuel Surcharge"
+                }
+              },
+              "queryRef": "Load.Fuel Surcharge",
+              "nativeQueryRef": "Fuel Surcharge"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Load"
+                    }
+                  },
+                  "Property": "Accessorial Charges"
+                }
+              },
+              "queryRef": "Load.Accessorial Charges",
+              "nativeQueryRef": "Accessorial Charges"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Load"
+                    }
+                  },
+                  "Property": "Total Charges"
+                }
+              },
+              "queryRef": "Load.Total Charges",
+              "nativeQueryRef": "Total Charges"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Fuel Purchase"
+                    }
+                  },
+                  "Property": "Fuel Cost"
+                }
+              },
+              "queryRef": "Fuel Purchase.Fuel Cost",
+              "nativeQueryRef": "Fuel Cost"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Load"
+                    }
+                  },
+                  "Property": "Contribution after Fuel"
+                }
+              },
+              "queryRef": "Load.Contribution after Fuel",
+              "nativeQueryRef": "Contribution after Fuel"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Load"
+                    }
+                  },
+                  "Property": "Line-Haul Revenue per Mile"
+                }
+              },
+              "queryRef": "Load.Line-Haul Revenue per Mile",
+              "nativeQueryRef": "Line-Haul Revenue per Mile"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Fuel Purchase"
+                    }
+                  },
+                  "Property": "Fuel Cost per Mile"
+                }
+              },
+              "queryRef": "Fuel Purchase.Fuel Cost per Mile",
+              "nativeQueryRef": "Fuel Cost per Mile"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Route"
+                  }
+                },
+                "Property": "Lane"
+              }
+            },
+            "direction": "Descending"
+          }
+        ]
+      }
+    },
+    "objects": {
+      "total": [
+        {
+          "properties": {
+            "totals": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "columnHeaders": [
+        {
+          "properties": {
+            "columnAdjustment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'fitToContent'"
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "11.5D"
+                }
+              }
+            },
+            "bold": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Center'"
+                }
+              }
+            },
+            "backColor": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#EEF3F8'"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "grid": [
+        {
+          "properties": {
+            "gridHorizontal": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "gridVertical": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "gridHorizontalWeight": {
+              "expr": {
+                "Literal": {
+                  "Value": "2D"
+                }
+              }
+            },
+            "textSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "11.5D"
+                }
+              }
+            },
+            "rowPadding": {
+              "expr": {
+                "Literal": {
+                  "Value": "12D"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "columnWidth": [
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "201.00270445822588D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Route.Lane"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "106.57218691904275D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Load.Line-Haul Revenue"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "109.91092719171317D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Load.Accessorial Charges"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "106.13876002084506D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Load.Fuel Surcharge"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "100.65071770334929D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Load.Total Charges"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "84.36024706057022D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Fuel Purchase.Fuel Cost"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "122.88037119987904D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Load.Contribution after Fuel"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "97.19033715227388D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Load.Line-Haul Revenue per Mile"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "96.90430622009569D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Fuel Purchase.Fuel Cost per Mile"
+          }
+        }
+      ],
+      "columnFormatting": [
+        {
+          "properties": {
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Center'"
+                }
+              }
+            },
+            "styleHeader": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "Route.Lane"
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "stylePreset": [
+        {
+          "properties": {
+            "name": {
+              "expr": {
+                "Literal": {
+                  "Value": "'None condensed'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

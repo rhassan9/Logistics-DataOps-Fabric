@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "sm_logistics_gold",
+    "description": "Star schema of a US trucking carrier, 2022 to 2024, built from a synthetic Kaggle dataset. Six business processes: loads, trips, pickup and delivery stops, fuel purchases, maintenance and safety incidents, sharing date, route, driver, truck, trailer and location dimensions. Answers on-time delivery by lane, contribution after fuel by route, asset economics, fuel spend, detention, maintenance spend, safety incidents, customer revenue and asset utilization."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "dc3e13fc-bf77-9e00-4a07-8044c3532aaf"
+  }
+}

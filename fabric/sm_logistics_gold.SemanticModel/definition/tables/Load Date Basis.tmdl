@@ -1,0 +1,37 @@
+/// Switches load measures between dispatch date (default) and booked, pickup or delivery date.
+table 'Load Date Basis'
+	lineageTag: c60ade26-f1fe-4458-addf-76ed2809c40b
+
+	calculationGroup
+		precedence: 20
+
+		calculationItem 'Dispatch Date' = SELECTEDMEASURE()
+
+		calculationItem 'Booked Date' = CALCULATE ( SELECTEDMEASURE (), USERELATIONSHIP ( 'Load'[booked_date_key], 'Date'[date_key] ) )
+
+		calculationItem 'Pickup Date' = CALCULATE ( SELECTEDMEASURE (), USERELATIONSHIP ( 'Load'[pickup_date_key], 'Date'[date_key] ) )
+
+		calculationItem 'Delivery Date' = CALCULATE ( SELECTEDMEASURE (), USERELATIONSHIP ( 'Load'[delivery_date_key], 'Date'[date_key] ) )
+
+	column 'Load Date Basis'
+		dataType: string
+		lineageTag: fb676458-4efd-4cbd-81b8-34935db3c599
+		summarizeBy: none
+		sourceColumn: Name
+		sortByColumn: Ordinal
+
+		annotation SummarizationSetBy = Automatic
+
+	column Ordinal
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 23254ff1-7577-4d9e-99f5-577943efd7c5
+		summarizeBy: sum
+		sourceColumn: Ordinal
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Load Date Basis' = calculationGroup
+		mode: import
+

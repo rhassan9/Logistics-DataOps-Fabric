@@ -1,0 +1,140 @@
+relationship 07b24051-9e39-7898-17ad-96b2b63d3e69
+	fromColumn: 'Stop Event'.scheduled_date_key
+	toColumn: Date.date_key
+
+relationship 730cb125-447b-65f2-b0e9-fc2f8343c67d
+	isActive: false
+	fromColumn: 'Stop Event'.actual_date_key
+	toColumn: Date.date_key
+
+relationship 6de11076-4103-d498-c724-3dd87791c6c9
+	fromColumn: Load.dispatched_date_key
+	toColumn: Date.date_key
+
+relationship c4fc9035-5e1b-9de0-82f9-36ef62111e12
+	isActive: false
+	fromColumn: Load.booked_date_key
+	toColumn: Date.date_key
+
+relationship 0ce9fecb-077f-1a82-28b9-8c6b1cd41acd
+	isActive: false
+	fromColumn: Load.pickup_date_key
+	toColumn: Date.date_key
+
+relationship d7de157a-3ecb-901c-5e90-4adc70215038
+	isActive: false
+	fromColumn: Load.delivery_date_key
+	toColumn: Date.date_key
+
+relationship 8a33642e-d9f4-4b63-0e3c-3133296ebccc
+	fromColumn: Trip.dispatch_date_key
+	toColumn: Date.date_key
+
+relationship 50316c18-c426-7c78-d2ad-396284e8e778
+	fromColumn: 'Fuel Purchase'.purchase_date_key
+	toColumn: Date.date_key
+
+relationship 9edcc172-7d5d-48c2-dd05-9033d631520c
+	fromColumn: 'Maintenance Event'.maintenance_date_key
+	toColumn: Date.date_key
+
+relationship e157c9de-3ad6-e00f-3775-c31c544a81e2
+	fromColumn: 'Safety Incident'.incident_date_key
+	toColumn: Date.date_key
+
+relationship 1af38e5b-636d-e958-8cb8-2f84f19ca6a3
+	fromColumn: 'Stop Event'.route_key
+	toColumn: Route.route_key
+
+relationship f26fb7cc-e56a-b236-9f89-3b1e6eb419cc
+	fromColumn: Load.route_key
+	toColumn: Route.route_key
+
+relationship 35cb6096-8113-2b00-c7b2-a1f35ff1c028
+	fromColumn: 'Fuel Purchase'.route_key
+	toColumn: Route.route_key
+
+relationship 8a908c1e-4aed-1d4b-9818-301463a43edd
+	fromColumn: Trip.route_key
+	toColumn: Route.route_key
+
+relationship ebfd76d3-67fd-a478-fe31-d0d27e01ffa9
+	fromColumn: Load.fulfilling_driver_key
+	toColumn: Driver.driver_key
+
+relationship bbe2c175-d6b0-8537-0edb-2de5d7cbf05e
+	fromColumn: Trip.driver_key
+	toColumn: Driver.driver_key
+
+relationship ad862061-61ab-6160-d0b6-7c900021a133
+	fromColumn: 'Fuel Purchase'.driver_key
+	toColumn: Driver.driver_key
+
+relationship 22376a70-6a7e-d3df-4549-90e1cea4380e
+	fromColumn: 'Safety Incident'.driver_key
+	toColumn: Driver.driver_key
+
+relationship 7eb924d5-fa05-b7a0-97f1-3655916e30b3
+	fromColumn: Load.fulfilling_truck_key
+	toColumn: Truck.truck_key
+
+relationship 2ed24d0a-22e1-51a4-10f7-44859e1e17ea
+	fromColumn: Trip.truck_key
+	toColumn: Truck.truck_key
+
+relationship e2d63874-72eb-e82a-3c5e-fb42e78290fb
+	fromColumn: 'Fuel Purchase'.truck_key
+	toColumn: Truck.truck_key
+
+relationship 4633bff4-9ee4-21d6-42a9-b1a2bc457c8f
+	fromColumn: 'Maintenance Event'.truck_key
+	toColumn: Truck.truck_key
+
+relationship d5811b19-c409-1fb0-dff1-1b6304258acd
+	fromColumn: 'Safety Incident'.truck_key
+	toColumn: Truck.truck_key
+
+relationship 40364e65-b8ab-98b1-581d-e7a4ae08952a
+	fromColumn: Load.fulfilling_trailer_key
+	toColumn: Trailer.trailer_key
+
+relationship a852a1b5-93cf-574e-1866-1c12799b6296
+	fromColumn: Trip.trailer_key
+	toColumn: Trailer.trailer_key
+
+relationship 0a4c353b-2963-cfaf-3660-8e7e1930556a
+	fromColumn: 'Fuel Purchase'.location_key
+	toColumn: Location.location_key
+
+relationship 716ab844-2e27-dfd8-c19d-5e9b294613bb
+	fromColumn: 'Maintenance Event'.location_key
+	toColumn: Location.location_key
+
+relationship d51e091e-daf3-435c-7661-c5ff55726a73
+	fromColumn: 'Safety Incident'.location_key
+	toColumn: Location.location_key
+
+relationship 9fe7c584-abf9-c371-4ea8-b823bc25ee63
+	fromColumn: Load.customer_key
+	toColumn: Customer.customer_key
+
+relationship 2bf066a6-412e-71b9-16f9-5a9b90b027c9
+	fromColumn: Load.load_type_key
+	toColumn: 'Load Type'.load_type_key
+
+relationship af6d308e-311f-90ec-7bc4-4c33234cf283
+	fromColumn: 'Stop Event'.facility_key
+	toColumn: Facility.facility_key
+
+relationship 55ee232e-b90f-6b73-696c-7e09d3d59328
+	fromColumn: 'Stop Event'.delivery_status_key
+	toColumn: 'Stop Status'.delivery_status_key
+
+relationship cc6af545-0fd5-877a-ba48-7965500a6047
+	fromColumn: 'Maintenance Event'.maintenance_class_key
+	toColumn: 'Maintenance Class'.maintenance_class_key
+
+relationship 4b1b7868-3d97-adee-96f2-3ea200aaf754
+	fromColumn: 'Safety Incident'.incident_class_key
+	toColumn: 'Incident Class'.incident_class_key
+

@@ -1,0 +1,236 @@
+/// Pickup and delivery facilities where stops take place.
+table Facility
+	lineageTag: a0983a97-5e24-47ce-900b-b3b4314da635
+	sourceLineageTag: [dim].[dim_facility]
+
+	column facility_key
+		dataType: int64
+		isHidden
+		isKey
+		formatString: 0
+		lineageTag: 7507c032-895a-40f5-8965-849149185b76
+		sourceLineageTag: facility_key
+		summarizeBy: none
+		sourceColumn: facility_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility ID'
+		dataType: string
+		lineageTag: 854f7d37-0b47-4105-920a-b13f8fb9b46a
+		sourceLineageTag: facility_id
+		summarizeBy: none
+		sourceColumn: facility_id
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility Name'
+		dataType: string
+		lineageTag: 70f84361-2d60-4933-bae0-915052038340
+		sourceLineageTag: facility_name
+		isDefaultLabel
+		summarizeBy: none
+		sourceColumn: facility_name
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility Type'
+		dataType: string
+		lineageTag: 9d45e5c7-8220-4619-a748-3431eb41fc55
+		sourceLineageTag: facility_type
+		summarizeBy: none
+		sourceColumn: facility_type
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility City'
+		dataType: string
+		lineageTag: 90e65f07-0485-42ff-bf87-014827480cd5
+		sourceLineageTag: facility_city
+		dataCategory: City
+		summarizeBy: none
+		sourceColumn: facility_city
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility State Code'
+		dataType: string
+		lineageTag: 0fd967ca-a110-4549-b82c-e7acbd3d65b1
+		sourceLineageTag: facility_state_code
+		summarizeBy: none
+		sourceColumn: facility_state_code
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility State'
+		dataType: string
+		lineageTag: f7cf668a-0519-4698-8d7b-91ccac82f192
+		sourceLineageTag: facility_state_name
+		dataCategory: StateOrProvince
+		summarizeBy: none
+		sourceColumn: facility_state_name
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility Operating Hours'
+		dataType: string
+		lineageTag: 6c48aea7-15b1-4d02-85f1-1e0f4d612074
+		sourceLineageTag: operating_hours
+		summarizeBy: none
+		sourceColumn: operating_hours
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility Dock Doors'
+		dataType: int64
+		formatString: 0
+		lineageTag: 221706e8-e0f3-4a70-ae2f-4407f1681b78
+		sourceLineageTag: dock_doors
+		summarizeBy: none
+		sourceColumn: dock_doors
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Facility Latitude'
+		dataType: double
+		lineageTag: c0b6bcb1-9f35-4b58-a8dc-a4338fa20967
+		sourceLineageTag: facility_latitude
+		dataCategory: Latitude
+		summarizeBy: none
+		sourceColumn: facility_latitude
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		changedProperty = FormatString
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Facility Longitude'
+		dataType: double
+		lineageTag: 67ac0234-e888-4727-8242-95f368a1ba5b
+		sourceLineageTag: facility_longitude
+		dataCategory: Longitude
+		summarizeBy: none
+		sourceColumn: facility_longitude
+
+		changedProperty = Name
+
+		changedProperty = DataCategory
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Facility Coordinate Is City Centroid'
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 3b2f5328-32b8-400e-9e84-6e13b9b7952b
+		sourceLineageTag: is_centroid_coordinate
+		summarizeBy: none
+		sourceColumn: is_centroid_coordinate
+
+		changedProperty = Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_from_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 9fd045da-d703-4fd5-a53d-0152718157be
+		sourceLineageTag: valid_from_date_key
+		summarizeBy: none
+		sourceColumn: valid_from_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_to_date_key
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 8863f2fd-b5b3-4e03-9d16-967bc21195ea
+		sourceLineageTag: valid_to_date_key
+		summarizeBy: none
+		sourceColumn: valid_to_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_current
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 5ebe247f-75d1-4ec9-830c-8b430ef9e2de
+		sourceLineageTag: is_current
+		summarizeBy: none
+		sourceColumn: is_current
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_deleted
+		dataType: boolean
+		isHidden
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: ba6dcec9-6797-474d-9484-adb6346de53b
+		sourceLineageTag: is_deleted
+		summarizeBy: none
+		sourceColumn: is_deleted
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column version_reason
+		dataType: string
+		isHidden
+		lineageTag: 73a2e709-351b-4006-9c1e-29209da2885a
+		sourceLineageTag: version_reason
+		summarizeBy: none
+		sourceColumn: version_reason
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Facility = entity
+		mode: directLake
+		source
+			entityName: dim_facility
+			schemaName: dim
+			expressionSource: 'DirectLake - wh_logistics_gold'
+
+	changedProperty = Name
+
+	changedProperty = Description
+

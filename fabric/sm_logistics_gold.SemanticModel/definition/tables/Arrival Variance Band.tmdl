@@ -1,0 +1,82 @@
+/// Helper table of 30-minute arrival variance bands used by the arrival distribution chart. Not related to other tables.
+table 'Arrival Variance Band'
+	lineageTag: 9da98c81-5126-49e3-8050-2ddceee0113f
+
+	/// Delivery events whose arrival variance falls in the selected 30-minute band.
+	measure 'Deliveries in Band' =
+			
+			VAR BandStart = SELECTEDVALUE ( 'Arrival Variance Band'[Band Start] )
+			VAR BandEnd   = SELECTEDVALUE ( 'Arrival Variance Band'[Band End] )
+			VAR LastEnd   = CALCULATE ( MAX ( 'Arrival Variance Band'[Band End] ), ALL ( 'Arrival Variance Band' ) )
+			RETURN
+			    IF (
+			        NOT ISBLANK ( BandStart ),
+			        CALCULATE (
+			            [Delivery Events],
+			            KEEPFILTERS (
+			                'Stop Event'[arrival_variance_minutes] >= BandStart
+			                    && ( 'Stop Event'[arrival_variance_minutes] < BandEnd
+			                        || ( BandEnd = LastEnd && 'Stop Event'[arrival_variance_minutes] <= BandEnd ) )
+			            )
+			        )
+			    )
+		formatString: #,0
+		displayFolder: Delivery Performance
+		lineageTag: d625fbd2-9b74-446c-a3df-913c52c7b370
+
+	/// Deliveries in the band as a share of all delivery events in the selection, whatever their arrival status.
+	measure 'Share of Deliveries in Band' =
+			
+			DIVIDE (
+			    [Deliveries in Band],
+			    CALCULATE ( [Delivery Events], REMOVEFILTERS ( 'Stop Status'[Arrival Status] ) )
+			)
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+		displayFolder: Delivery Performance
+		lineageTag: b40f4ebe-42a6-4a23-a095-7b893bc0da8e
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column 'Band Start'
+		isHidden
+		formatString: 0
+		lineageTag: 8ab775b9-b6f0-4b38-8ccc-eddad9a40efe
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Band Start]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Band End'
+		isHidden
+		formatString: 0
+		lineageTag: 91e462d2-493d-4010-87c2-5f4e0b0bbcde
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Band End]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Arrival Variance Band'
+		lineageTag: a9fb36eb-fa08-4a99-a4f9-7669988e49dd
+		isDefaultLabel
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Arrival Variance Band]
+		sortByColumn: 'Band Start'
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Arrival Variance Band' = calculated
+		mode: import
+		source =
+				
+				SELECTCOLUMNS (
+				    GENERATESERIES ( -180, 330, 30 ),
+				    "Band Start", [Value],
+				    "Band End", [Value] + 30,
+				    "Arrival Variance Band", FORMAT ( [Value], "+0;-0;0" ) & " to " & FORMAT ( [Value] + 30, "+0;-0;0" ) & " minutes"
+				)
+
+	annotation PBI_Id = 023d120ea1744cfda1d0b4ce09af3b56
+
