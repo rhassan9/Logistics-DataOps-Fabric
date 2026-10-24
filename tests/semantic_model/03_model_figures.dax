@@ -1,0 +1,85 @@
+// Semantic model figures, from sm_logistics_gold.
+//
+// Run in DAX query view on the semantic model, one EVALUATE at a time, and
+// compare each result with the query of the same name in 02_warehouse_figures.sql:
+// rates to four decimals, money to the cent.
+
+// V1. Grand totals
+EVALUATE
+ROW (
+    "Delivery Events", [Delivery Events],
+    "On-Time Rate", [On-Time Rate],
+    "Average Arrival Variance Minutes", [Average Arrival Variance Minutes],
+    "Total Charges", [Total Charges],
+    "Fuel Cost", [Fuel Cost],
+    "Actual Miles", [Actual Miles]
+)
+
+// V2. By lane
+EVALUATE
+SUMMARIZECOLUMNS (
+    'Route'[Lane],
+    "Delivery Events", [Delivery Events],
+    "On-Time Rate", [On-Time Rate],
+    "Average Arrival Variance Minutes", [Average Arrival Variance Minutes],
+    "Total Charges", [Total Charges],
+    "Fuel Cost", [Fuel Cost],
+    "Contribution after Fuel", [Contribution after Fuel],
+    "Line-Haul Revenue per Mile", [Line-Haul Revenue per Mile]
+)
+ORDER BY [Contribution after Fuel] DESC
+
+// V3. The other seven requirements' base measures
+EVALUATE
+ROW (
+    "Trips", [Trips],
+    "Trip Fuel Gallons", [Trip Fuel Gallons],
+    "Gallons Purchased", [Gallons Purchased],
+    "Average Price per Gallon", [Average Price per Gallon],
+    "Lowest Price Paid", [Lowest Price Paid],
+    "Highest Price Paid", [Highest Price Paid],
+    "Stop Events", [Stop Events],
+    "Billable Detention Minutes", [Billable Detention Minutes],
+    "Stops over Free Time", [Stops over Free Time],
+    "Maintenance Events", [Maintenance Events],
+    "Maintenance Cost", [Maintenance Cost],
+    "Downtime Hours", [Downtime Hours],
+    "Incidents", [Incidents],
+    "Claim Cost", [Claim Cost],
+    "Active Trucks", [Active Trucks],
+    "Active Drivers", [Active Drivers],
+    "Average Credit Terms Days", [Average Credit Terms Days],
+    "Delivery share with detention",
+        CALCULATE ( [Share of Stops with Detention], 'Stop Status'[Stop Type] = "Delivery" )
+)
+
+// V4. Stop Date Basis moves deliveries between months and never changes the total
+EVALUATE
+SUMMARIZECOLUMNS (
+    'Date'[year_month_number],
+    'Date'[Year Month],
+    "Deliveries by Scheduled Date", [Delivery Events],
+    "Deliveries by Actual Date",
+        CALCULATE ( [Delivery Events], 'Stop Date Basis'[Stop Date Basis] = "Actual Date" )
+)
+ORDER BY 'Date'[year_month_number]
+
+// V5a. Active trucks and drivers under a year filter
+EVALUATE
+SUMMARIZECOLUMNS (
+    'Date'[Year],
+    "Trips", [Trips],
+    "Active Trucks", [Active Trucks],
+    "Active Drivers", [Active Drivers],
+    "Trips per Active Truck", [Trips per Active Truck]
+)
+ORDER BY 'Date'[Year]
+
+// V5b. Active trucks and drivers under a lane filter
+EVALUATE
+SUMMARIZECOLUMNS (
+    'Route'[Lane],
+    "Active Trucks", [Active Trucks],
+    "Active Drivers", [Active Drivers]
+)
+ORDER BY 'Route'[Lane]

@@ -4,6 +4,8 @@ A medallion-architecture data platform on Microsoft Fabric: a PostgreSQL operati
 
 This is a migration of [Logistics-DataOps-Pipeline](https://github.com/rhassan9/Logistics-DataOps-Pipeline), a dbt and PostgreSQL warehouse, onto Fabric. Both versions are maintained so the two approaches can be compared directly.
 
+![On-time delivery by lane, from the Direct Lake semantic model](docs/images/dp1_on_time_by_lane.png)
+
 ## At a glance
 
 - **541,930 source rows, 12 tables, three years** of fleet, shipment and safety data, landed append-only in bronze and refined to one row per business key in silver.
@@ -73,7 +75,7 @@ flowchart TD
 
 **Findings stated, not hidden.** Building the report exposed a property of the synthetic source: fuel purchases do not follow trip distance (correlation 0.0000 with fuel cost, against 0.98 for fuel actually used on the trip), so the shortest lanes show negative contribution after fuel. The page states this rather than replacing the source's figure with an estimate.
 
-**Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver. The orchestration was then tested by failure: a cancelled detection, a broken fact, a broken dimension step and overlapping runs.
+**Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver. The orchestration was then tested by failure: a cancelled detection, a broken fact, a broken dimension step and overlapping runs. The checks, scenarios and acceptance tests are in [tests/](tests/README.md), written to be rerun.
 
 ### Defects caught before release
 
@@ -121,7 +123,7 @@ The dataset is about 125 MB. Most of the machinery here exists for correctness r
 
 ## Source data
 
-A logistics operations database covering fleet, drivers, shipments and safety across three years, from the [Logistics Operations Database](https://www.kaggle.com/datasets/yogape/logistics-operations-database) on Kaggle (MIT licence).
+A logistics operations database covering fleet, drivers, shipments and safety across three years, from the [Logistics Operations Database](https://www.kaggle.com/datasets/yogape/logistics-operations-database) on Kaggle. The data is not included in this repository; see [Licence](#licence).
 
 | Table | Rows |
 |---|---:|
@@ -227,7 +229,7 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 ```
 ├── fabric/     Fabric item definitions (managed by Git integration)
 ├── sql/        Source database schema and load scripts
-├── tests/      Test helpers that run outside the deployed workspace
+├── tests/      Checks, change scenarios and pipeline acceptance tests
 └── docs/       Per-layer design notes and comparisons
 ```
 
@@ -243,3 +245,9 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 | M4 Deployment pipelines and CI/CD | Planned |
 | M5 Eventhouse and KQL | Planned |
 | M6 dbt vs Fabric comparison write-up | Planned |
+
+---
+
+## Licence
+
+The code and documentation in this repository are released under the [MIT Licence](LICENSE). The source dataset is not redistributed here: it is downloaded from [Kaggle](https://www.kaggle.com/datasets/yogape/logistics-operations-database) and remains under the terms its publisher sets there.

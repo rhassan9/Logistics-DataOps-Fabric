@@ -449,6 +449,8 @@ Every fact was tested through the real pipeline with a fixed sequence of runs, e
 
 Each run is checked in both directions against silver: row and key counts, every column compared with `EXCEPT` both ways, a key oracle that translates gold's surrogate keys back to business ids, worklist leftovers and checkpoint positions. For `fact_load_lifecycle` an independent oracle rebuilds every row from silver, and a cross-fact check confirms that every live trip's resources and dispatch date agree with the lifecycle row of its load.
 
+The checks are in [tests/gold/checks](../tests/gold/checks), each a read-only query that returns no rows when the property holds, so they rerun after any pipeline run. The change scenarios are in [tests/gold/scenarios](../tests/gold/scenarios) and end with a forced full rebuild that returns gold to silver's exact state.
+
 Review and testing found six defects, each fixed:
 
 - **Reused run_ids skipped changes.** The checkpoint view first matched a window to a success by run_id alone, so a detection repeated under a run_id that had already succeeded advanced the checkpoint without any procedure processing its keys. The cross-fact check exposed it as one lifecycle row disagreeing with `fact_trip`. The view now requires the success to follow the detection, and the notebook rejects a run_id a fact has already used.
@@ -460,7 +462,7 @@ Review and testing found six defects, each fixed:
 
 ### Pipeline acceptance tests
 
-The procedure tests above prove each piece. These prove the pieces wired together, by breaking the real pipeline on purpose. The source is static, so `tests/pipeline/touch_silver.py` creates the changes: it rewrites silver rows with their own values, which Delta records in the change feed without changing any value, and it can flag rows deleted and restore them exactly from an earlier version.
+The procedure tests above prove each piece. These prove the pieces wired together, by breaking the real pipeline on purpose; the steps are in [tests/pipeline/acceptance_tests.md](../tests/pipeline/acceptance_tests.md). The source is static, so `tests/pipeline/touch_silver.py` creates the changes: it rewrites silver rows with their own values, which Delta records in the change feed without changing any value, and it can flag rows deleted and restore them exactly from an earlier version.
 
 | Test | What happened | Result |
 |---|---|---|
@@ -591,7 +593,7 @@ The model defines no roles, because no requirement defines who may see which row
 
 ### Validation
 
-Every figure the model produces was compared with an independent warehouse query (`22_stage7_validation.sql` against DAX query view) before any column was renamed:
+Every figure the model produces was compared with an independent warehouse query ([tests/semantic_model](../tests/semantic_model), T-SQL against DAX query view) before any column was renamed:
 
 | Check | Compares |
 |---|---|
