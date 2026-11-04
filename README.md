@@ -123,7 +123,7 @@ The dataset is about 125 MB. Most of the machinery here exists for correctness r
 
 ## Source data
 
-A logistics operations database covering fleet, drivers, shipments and safety across three years, from the [Logistics Operations Database](https://www.kaggle.com/datasets/yogape/logistics-operations-database) on Kaggle. The data is not included in this repository; see [Licence](#licence).
+A logistics operations database covering fleet, drivers, shipments and safety across three years, from the [Synthetic Logistics Operations Database](https://www.kaggle.com/datasets/yogape/logistics-operations-database) by Yogape Rodriguez on Kaggle. The data is not included in this repository; see [Licence](#licence).
 
 | Table | Rows |
 |---|---:|
@@ -250,4 +250,6 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 
 ## Licence
 
-The code and documentation in this repository are released under the [MIT Licence](LICENSE). The source dataset is not redistributed here: it is downloaded from [Kaggle](https://www.kaggle.com/datasets/yogape/logistics-operations-database) and remains under the terms its publisher sets there.
+The code and documentation in this repository are released under the [MIT Licence](LICENSE). The source dataset is not redistributed here: it is downloaded from Kaggle, where its publisher releases it under the MIT Licence.
+
+Dataset: Yogape Rodriguez (2025). *Synthetic Logistics Operations Database (2022-2024)*. Kaggle Dataset. https://www.kaggle.com/datasets/yogape/logistics-operations-database
