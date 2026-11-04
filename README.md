@@ -4,7 +4,7 @@ A medallion-architecture data platform on Microsoft Fabric: a PostgreSQL operati
 
 This is a migration of [Logistics-DataOps-Pipeline](https://github.com/rhassan9/Logistics-DataOps-Pipeline), a dbt and PostgreSQL warehouse, onto Fabric. Both versions are maintained so the two approaches can be compared directly.
 
-![On-time delivery by lane, from the Direct Lake semantic model](docs/images/dp1_on_time_by_lane.png)
+[![Watch the 8-minute walkthrough on YouTube](docs/images/walkthrough_thumbnail.png)](https://youtu.be/5SXY1LpRNro)
 
 ## At a glance
 
