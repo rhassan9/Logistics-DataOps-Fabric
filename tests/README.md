@@ -11,13 +11,14 @@ tests/
 └── semantic_model/      the model's figures against independent warehouse queries
 ```
 
-There are three kinds of test, and they run differently:
+There are four kinds of test, and they run differently:
 
 | Kind | Changes data | Where it runs | Pass condition |
 |---|---|---|---|
 | Checks | no | any workspace, any time | no rows returned |
 | Scenarios and acceptance tests | yes, in silver, gold or the pipeline | a development workspace only | the expected outcome each step states |
 | Semantic model comparisons | no | DAX query view and the warehouse | the two sides return the same values |
+| Continuous integration | no | GitHub Actions, on every push and pull request | every job passes |
 
 ## Checks
 
@@ -64,3 +65,17 @@ The scenarios write to silver and gold directly, so they run in a development wo
 | [03_model_figures.dax](semantic_model/03_model_figures.dax) | DAX query view on `sm_logistics_gold` | the model's figures |
 
 Queries V1 to V5 run on both sides and must return the same values: grand totals, every lane, the other seven requirements' measures, the Stop Date Basis month shift, and active trucks and drivers under year and lane filters. Both sides return rows, so these are compared side by side rather than asserted.
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push and pull request. It needs no Fabric credentials and never connects to a workspace, so it proves the committed definitions are consistent, not that the pipeline produces correct data. That is proven by the checks, scenarios and acceptance tests above, run in Fabric.
+
+| Job | Checks |
+|---|---|
+| Static checks | item JSON parses and, where Microsoft publishes a schema, validates against it; logicalIds are unique and every notebook, pipeline and model reference resolves; `pl_gold_load` calls the right procedure for each of the six facts, passes the run_id, never enables mass delete, and its completeness check waits for all six to succeed; notebooks parse as Python 3.13; every report field exists in the semantic model; the model counts in the README match the model; every lakehouse table the warehouse SQL names is created by the silver or ops notebooks; no Slack webhook URL is committed |
+| Warehouse SQL build | `dotnet build` of the warehouse database project. A build cannot resolve lakehouse references, so each unresolved-reference error or warning is accepted only when it names a table or column the silver or ops notebooks create. Any other error fails the job |
+| Build check catches ... | five runs that each inject one known defect on the runner (a syntax error, a missing gold table, a missing silver table, a missing silver column, a missing baseline column) and pass only if the build check rejects it |
+
+Before validating the repository, the static checks run their own tests: each check must fail on a deliberate defect in a temporary copy.
+
+Not covered by CI: data and anything that needs a workspace; the semantic model's TMDL, which is not JSON; and silver column names inside stored procedures, which the build reports only at table level. Report visuals whose schema version Microsoft has not published are parsed but reported as not schema-validated.

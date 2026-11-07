@@ -75,7 +75,7 @@ flowchart TD
 
 **Findings stated, not hidden.** Building the report exposed a property of the synthetic source: fuel purchases do not follow trip distance (correlation 0.0000 with fuel cost, against 0.98 for fuel actually used on the trip), so the shortest lanes show negative contribution after fuel. The page states this rather than replacing the source's figure with an estimate.
 
-**Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver. The orchestration was then tested by failure: a cancelled detection, a broken fact, a broken dimension step and overlapping runs. The checks, scenarios and acceptance tests are in [tests/](tests/README.md), written to be rerun.
+**Tested through the real pipeline.** Every fact was exercised with first loads, idle runs, genuine value changes, deletions, restores from bronze and forced full rebuilds, each checked in both directions against silver. The orchestration was then tested by failure: a cancelled detection, a broken fact, a broken dimension step and overlapping runs. The checks, scenarios and acceptance tests are in [tests/](tests/README.md), written to be rerun. Static checks of the item definitions and a build of the warehouse SQL also run in GitHub Actions on every push; see [Continuous integration](tests/README.md#continuous-integration).
 
 ### Defects caught before release
 
@@ -227,6 +227,8 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 ## Repository structure
 
 ```
+├── .github/    GitHub Actions workflow
+├── ci/         Static checks run by CI, with their own tests
 ├── fabric/     Fabric item definitions (managed by Git integration)
 ├── sql/        Source database schema and load scripts
 ├── tests/      Checks, change scenarios and pipeline acceptance tests
@@ -242,7 +244,7 @@ The two pre-aggregated tables in the Kaggle export are not loaded into the sourc
 | M1 Bronze ingestion | Complete |
 | M2 Silver transformation | Complete |
 | M3 Gold star schema and semantic model | Complete |
-| M4 Deployment pipelines and CI/CD | Planned |
+| M4 Deployment pipelines and CI/CD | In progress: CI static validation complete, deployment pipelines planned |
 | M5 Eventhouse and KQL | Planned |
 | M6 dbt vs Fabric comparison write-up | Planned |
 
