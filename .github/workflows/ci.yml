@@ -1,0 +1,135 @@
+# Static validation of the committed Fabric item definitions. It needs no Fabric
+# credentials and never connects to a workspace, so it proves the definitions are
+# consistent, not that the deployed pipeline produces correct data.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Microsoft's published Fabric JSON schemas, pinned to a commit for repeatable runs.
+  JSON_SCHEMAS_COMMIT: eecc60d35b9ab18b884d35c50abe7d09d2753cdf
+
+jobs:
+  static-checks:
+    name: Static checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13 (the Python of Fabric Runtime 2.0)
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Install the validator's dependencies
+        run: python -m pip install --disable-pip-version-check -r ci/requirements.txt
+
+      - name: Fetch Microsoft's Fabric JSON schemas
+        run: |
+          git init --quiet "$RUNNER_TEMP/json-schemas"
+          git -C "$RUNNER_TEMP/json-schemas" fetch --quiet --depth 1 \
+            https://github.com/microsoft/json-schemas.git "$JSON_SCHEMAS_COMMIT"
+          git -C "$RUNNER_TEMP/json-schemas" checkout --quiet FETCH_HEAD
+
+      - name: Test the checks against deliberate defects
+        env:
+          CI_SCHEMAS_DIR: ${{ runner.temp }}/json-schemas
+        run: python -m unittest discover -s ci/tests -v
+
+      - name: Validate the repository
+        run: python ci/validate_repo.py --schemas "$RUNNER_TEMP/json-schemas"
+
+  warehouse-build:
+    name: Warehouse SQL build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build the warehouse SQL project
+        id: build
+        run: |
+          set +e
+          dotnet build fabric/wh_logistics_gold.Warehouse/wh_logistics_gold.sqlproj --nologo 2>&1 | tee build.log
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Classify the build result
+        env:
+          BUILD_CODE: ${{ steps.build.outputs.code }}
+        run: python ci/sql_build_report.py build.log "$BUILD_CODE" --summary "$GITHUB_STEP_SUMMARY"
+
+  warehouse-self-test:
+    name: Build check catches ${{ matrix.defect }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        defect:
+          - syntax
+          - gold-reference
+          - silver-table
+          - silver-column
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Inject the defect into this runner's copy only
+        id: inject
+        env:
+          DEFECT: ${{ matrix.defect }}
+        run: echo "file=$(python ci/inject_sql_failure.py "$DEFECT")" >> "$GITHUB_OUTPUT"
+
+      - name: Build the warehouse SQL project
+        id: build
+        run: |
+          set +e
+          dotnet build fabric/wh_logistics_gold.Warehouse/wh_logistics_gold.sqlproj --nologo 2>&1 | tee build.log
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Expect the build check to reject the defect
+        env:
+          BUILD_CODE: ${{ steps.build.outputs.code }}
+          DEFECT_FILE: ${{ steps.inject.outputs.file }}
+        run: |
+          python ci/sql_build_report.py build.log "$BUILD_CODE" \
+            --expect-failure-in "$DEFECT_FILE" --summary "$GITHUB_STEP_SUMMARY"
