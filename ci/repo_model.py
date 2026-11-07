@@ -59,6 +59,27 @@ def silver_inventory(root: Path) -> dict[str, set[str]]:
     return tables
 
 
+OPS_BASELINE_NOTEBOOK = "fabric/nb_validation_baseline.Notebook/notebook-content.py"
+OPS_DATABASE = "lh_logistics_ops"
+
+
+def ops_inventory(root: Path) -> dict[str, set[str]]:
+    """Validation baseline tables in lh_logistics_ops, read from the explicit
+    StructType schemas in the notebook that writes them (validation_<name>)."""
+    text = (root / OPS_BASELINE_NOTEBOOK).read_text(encoding="utf-8")
+    tables = {}
+    for name, body in re.findall(r'"(\w+)"\s*:\s*T\.StructType\(\[(.*?)\]\)', text, re.S):
+        tables[f"validation_{name}"] = set(re.findall(r'T\.StructField\(\s*"(\w+)"', body))
+    if not tables:
+        raise ValueError(f"no baseline schemas found in {OPS_BASELINE_NOTEBOOK}")
+    return tables
+
+
+def external_inventory(root: Path) -> dict[str, dict[str, set[str]]]:
+    """Every database gold reads by three-part name, with its tables and columns."""
+    return {SILVER_DATABASE: silver_inventory(root), OPS_DATABASE: ops_inventory(root)}
+
+
 def _column_names(ddl: str) -> set[str]:
     names = set()
     for line in ddl.splitlines():

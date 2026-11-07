@@ -1,17 +1,24 @@
 """Classify the output of `dotnet build` for the warehouse SQL project.
 
-Gold reads silver through the silver lakehouse's SQL analytics endpoint. That
-endpoint is not a SQL project, so the build cannot resolve those names and stops
-before producing a .dacpac. This script separates those expected errors from real
-ones, and treats an error as expected only when all of these hold:
+Gold reads two lakehouses by three-part name: lh_logistics_silver (the source of
+every dimension and fact) and lh_logistics_ops (the publisher's baselines used by
+reconciliation). Lakehouse SQL analytics endpoints are not SQL projects, so the
+build cannot resolve those names. It reports them as errors inside views
+(SQL71501, SQL71561) and as warnings inside procedures (SQL71562), and stops before
+producing a .dacpac. An unresolved reference to a gold object inside a procedure
+is also only a warning (SQL71502), so warnings must be checked too.
 
-  * the code is SQL71501 or SQL71561 (unresolved reference)
-  * the error is raised in a script that names lh_logistics_silver
-  * every object it names is lh_logistics_silver.dbo.<table>[.<column>], and that
-    table and column exist in the silver DDL notebook (exact spelling)
+An unresolved-reference diagnostic, error or warning, is accepted only when:
 
-Anything else fails the check, including a failed build whose errors cannot be
-read. Warnings are listed in full and do not fail the check.
+  * it is raised in a script that names the lakehouse it refers to
+  * every object it names is <lakehouse>.dbo.<table>[.<column>], and that table and
+    column exist in the notebook that defines the lakehouse schema (exact spelling)
+  * for "could refer to any of the following objects" lists, only the direct
+    candidates count: entries written [schema].[object].[alias]::[column] are DacFx
+    trying the unresolved alias against every object in scope, and name nothing
+
+Anything else fails the check, including a failed build whose errors cannot be read.
+Other warnings are listed in full and do not fail the check.
 
 Usage:
     python ci/sql_build_report.py BUILD_LOG BUILD_EXIT_CODE [--root .]
@@ -32,9 +39,11 @@ import repo_model as rm  # noqa: E402
 
 LINE = re.compile(r"^(?P<file>.+?\.sql)\((?P<row>\d+),(?P<col>\d+)\):\s+(?:Build\s+)?"
                   r"(?P<sev>error|warning)\s+(?P<code>[A-Z]+\d+):\s+(?P<msg>.*?)(?:\s+\[[^\]]*\])?\s*$")
-OTHER_ERROR = re.compile(r"\b(?:error)\s+(?P<code>[A-Z]+\d+)\s*:\s*(?P<msg>.*)$")
+OTHER_ERROR = re.compile(r"\berror\s+(?P<code>[A-Z]+\d+)\s*:\s*(?P<msg>.*)$")
 NAME = re.compile(r"\[[^\]]+\](?:(?:\.|::)\[[^\]]+\])*")
-UNRESOLVED_CODES = {"SQL71501", "SQL71561"}
+UNRESOLVED_ERRORS = {"SQL71501", "SQL71561"}
+UNRESOLVED_WARNINGS = {"SQL71502", "SQL71562"}
+CANDIDATES = "could refer to any of the following objects"
 
 
 @dataclass(frozen=True)
@@ -45,6 +54,10 @@ class Diagnostic:
     code: str
     message: str
 
+    @property
+    def unresolved(self) -> bool:
+        return self.code in (UNRESOLVED_ERRORS if self.severity == "error" else UNRESOLVED_WARNINGS)
+
 
 def parse(log: str) -> tuple[list[Diagnostic], list[str]]:
     diagnostics, unparsed = {}, []
@@ -54,7 +67,7 @@ def parse(log: str) -> tuple[list[Diagnostic], list[str]]:
         if match:
             d = Diagnostic(match["file"].replace("\\", "/"), int(match["row"]), match["sev"],
                            match["code"], match["msg"])
-            diagnostics[(d.file, d.row, d.code, d.message)] = d
+            diagnostics[(d.file, d.row, d.severity, d.code, d.message)] = d
         elif OTHER_ERROR.search(text) and " 0 Error(s)" not in text:
             unparsed.append(text)
     return list(diagnostics.values()), sorted(set(unparsed))
@@ -64,75 +77,73 @@ def split_name(name: str) -> list[str]:
     return re.findall(r"\[([^\]]+)\]", name)
 
 
-def silver_name_status(name: str, inventory: dict[str, set[str]]) -> str:
-    """'valid', 'unknown-table', 'unknown-column', or 'not-silver'."""
-    alias_form = "::" in name
+def name_status(name: str, inventory) -> tuple[str, str | None]:
+    """('valid' | 'unknown-table' | 'unknown-column' | 'not-external', database)."""
     parts = split_name(name)
-    if len(parts) < 3 or parts[0] != rm.SILVER_DATABASE or parts[1] != rm.SILVER_SCHEMA:
-        return "not-silver"
-    table, rest = parts[2], parts[3:]
-    if table not in inventory:
-        return "unknown-table"
-    if not rest:
-        return "valid"
-    if alias_form and len(rest) == 2:
-        rest = rest[1:]
-    if len(rest) != 1:
-        return "not-silver"
-    return "valid" if rest[0] in inventory[table] else "unknown-column"
+    if len(parts) < 3 or parts[0] not in inventory or parts[1] != rm.SILVER_SCHEMA:
+        return "not-external", None
+    tables = inventory[parts[0]]
+    if parts[2] not in tables:
+        return "unknown-table", parts[0]
+    if len(parts) == 3:
+        return "valid", parts[0]
+    if len(parts) == 4:
+        return ("valid" if parts[3] in tables[parts[2]] else "unknown-column"), parts[0]
+    return "not-external", parts[0]
 
 
-def classify(d: Diagnostic, inventory, silver_files: set[str]) -> tuple[bool, str]:
-    if d.code not in UNRESOLVED_CODES:
-        return False, f"{d.code} is not an unresolved-reference error"
-    if not any(d.file.endswith(f) for f in silver_files):
-        return False, "raised in a script that does not read silver"
+def classify(d: Diagnostic, inventory, files_by_database) -> tuple[bool, str]:
     if "reference" not in d.message:
         return False, "message names no referenced object"
-    head, referenced = d.message.split("reference", 1)
-    names = NAME.findall(referenced)
+    names = NAME.findall(d.message.split("reference", 1)[1])
+    candidates = CANDIDATES in d.message
+    if candidates:
+        names = [n for n in names if "::" not in n]
     if not names:
         return False, "message names no referenced object"
-    candidates = "could refer to any of the following objects" in d.message
-    subject = split_name(NAME.findall(head)[0])[:2] if NAME.findall(head) else None
-    if candidates and subject:
-        # DacFx can also list the referencing object's own alias-scoped form
-        # ([schema].[object].[alias]::[column]); it names no other object.
-        names = [n for n in names if split_name(n)[:2] != subject]
-        if not names:
-            return False, "candidate list names no silver object"
-    statuses = [silver_name_status(n, inventory) for n in names]
-    if "not-silver" in statuses:
-        return False, "names an object outside lh_logistics_silver.dbo"
-    if candidates:
-        if "valid" not in statuses:
-            return False, f"no candidate exists in the silver DDL ({', '.join(sorted(set(statuses)))})"
-    elif any(s != "valid" for s in statuses):
-        return False, f"silver name not in the silver DDL ({', '.join(sorted(set(statuses)))})"
-    return True, "verified silver reference"
+    results = [name_status(n, inventory) for n in names]
+    statuses = {status for status, _ in results}
+    if "not-external" in statuses:
+        return False, "names an object that is not a lakehouse table (a gold object or another database)"
+    for _, database in results:
+        if not any(d.file.endswith(f) for f in files_by_database[database]):
+            return False, f"raised in a script that does not read {database}"
+    if candidates and "valid" not in statuses:
+        return False, f"no candidate exists in the lakehouse schema ({', '.join(sorted(statuses))})"
+    if not candidates and statuses != {"valid"}:
+        return False, f"name not in the lakehouse schema ({', '.join(sorted(statuses))})"
+    return True, "verified lakehouse reference"
 
 
 def report(log: str, exit_code: int, root: Path, expect_failure_in: str | None = None):
-    inventory = rm.silver_inventory(root)
-    silver_files = {p.relative_to(root).as_posix() for p in rm.warehouse_sql_files(root)
-                    if rm.SILVER_DATABASE in p.read_text(encoding="utf-8-sig")}
+    inventory = rm.external_inventory(root)
+    sql = {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8-sig")
+           for p in rm.warehouse_sql_files(root)}
+    files_by_database = {db: {f for f, text in sql.items() if db in text} for db in inventory}
     diagnostics, unparsed = parse(log)
     errors = [d for d in diagnostics if d.severity == "error"]
     warnings = [d for d in diagnostics if d.severity == "warning"]
-    expected, rejected = [], []
-    for d in errors:
-        ok, reason = classify(d, inventory, silver_files)
-        (expected if ok else rejected).append((d, reason))
 
-    if exit_code == 0:
+    accepted, rejected = [], []
+    for d in diagnostics:
+        if d.unresolved:
+            ok, reason = classify(d, inventory, files_by_database)
+        elif d.severity == "error":
+            ok, reason = False, f"{d.code} is not an unresolved-reference error"
+        else:
+            continue
+        (accepted if ok else rejected).append((d, reason))
+    other_warnings = [d for d in warnings if not d.unresolved]
+
+    if exit_code == 0 and not rejected:
         verdict, passed = "Build succeeded and produced a .dacpac", True
-    elif not errors and not unparsed:
+    elif exit_code != 0 and not errors and not unparsed:
         verdict, passed = "Build failed without any readable error: inspect the raw log", False
     elif rejected or unparsed:
-        verdict, passed = "Build has errors that are not verified silver references", False
+        verdict, passed = "Build has diagnostics that are not verified lakehouse references", False
     else:
-        verdict, passed = ("No .dacpac: every error is a reference to a silver table or column "
-                           "that exists in the silver DDL"), True
+        verdict, passed = ("No .dacpac: every unresolved reference names a lakehouse table or "
+                           "column that exists in the notebook defining that lakehouse"), True
 
     if expect_failure_in is not None:
         caught = any(d.file.endswith(expect_failure_in) for d, _ in rejected)
@@ -140,26 +151,30 @@ def report(log: str, exit_code: int, root: Path, expect_failure_in: str | None =
                    f"{expect_failure_in} was {'caught' if caught else 'NOT caught'}. ({verdict})")
         passed = caught
 
+    def count(items, severity):
+        return sum(1 for d, _ in items if d.severity == severity)
+
     out = [f"### Warehouse SQL build: {'PASS' if passed else 'FAIL'}", "", f"- {verdict}",
            f"- dotnet build exit code: {exit_code}",
-           f"- Errors: {len(errors)} ({len(expected)} verified silver references, {len(rejected)} other)",
-           f"- Warnings: {len(warnings)} {dict(collections.Counter(d.code for d in warnings))}"]
+           f"- Errors: {len(errors)} ({count(accepted, 'error')} verified lakehouse references, "
+           f"{count(rejected, 'error')} rejected)",
+           f"- Warnings: {len(warnings)} {dict(collections.Counter(d.code for d in warnings))} "
+           f"({count(accepted, 'warning')} verified lakehouse references, "
+           f"{count(rejected, 'warning')} rejected, {len(other_warnings)} other)"]
     if unparsed:
         out += ["", "Errors outside SQL scripts:", ""] + [f"- `{u[:300]}`" for u in unparsed]
     if rejected:
-        out += ["", "Errors that fail the check:", ""]
-        out += [f"- `{d.file.split('/')[-1]}:{d.row}` {d.code} ({reason}): {d.message[:400]}"
+        out += ["", "Diagnostics that fail the check:", ""]
+        out += [f"- `{d.file.split('/')[-1]}:{d.row}` {d.severity} {d.code} ({reason}): {d.message[:600]}"
                 for d, reason in rejected[:40]]
-    if expected:
-        by_file = collections.Counter(d.file.split("/")[-1] for d, _ in expected)
-        out += ["", "<details><summary>Verified silver references by script</summary>", ""]
-        out += [f"- {name}: {count}" for name, count in sorted(by_file.items())]
-        out += ["", "Messages:", ""]
-        out += [f"- `{d.file.split('/')[-1]}:{d.row}` {d.code}: {d.message}" for d, _ in expected]
+    if accepted:
+        by_file = collections.Counter(d.file.split("/")[-1] for d, _ in accepted)
+        out += ["", "<details><summary>Verified lakehouse references by script</summary>", ""]
+        out += [f"- {name}: {n}" for name, n in sorted(by_file.items())]
         out += ["", "</details>"]
-    if warnings:
-        out += ["", "<details><summary>All warnings</summary>", ""]
-        out += [f"- `{d.file.split('/')[-1]}:{d.row}` {d.code}: {d.message}" for d in warnings]
+    if other_warnings:
+        out += ["", "<details><summary>Other warnings</summary>", ""]
+        out += [f"- `{d.file.split('/')[-1]}:{d.row}` {d.code}: {d.message}" for d in other_warnings]
         out += ["", "</details>"]
     return passed, "\n".join(out) + "\n"
 

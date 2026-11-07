@@ -170,12 +170,18 @@ class WarehouseNames(RepoCopy):
     def test_unknown_silver_table(self):
         self.edit_text(f"{rm.WAREHOUSE_DIR}/dim/Views/vw_src_truck.sql",
                        "lh_logistics_silver.dbo.silver_trucks", "lh_logistics_silver.dbo.silver_truckz")
-        self.assert_fails(vr.check_warehouse_names(self.root), "silver_truckz is not a silver table")
+        self.assert_fails(vr.check_warehouse_names(self.root), "silver_truckz is not a table in lh_logistics_silver")
 
     def test_wrong_schema_spelling(self):
         self.edit_text(f"{rm.WAREHOUSE_DIR}/dim/Views/vw_src_truck.sql",
                        "lh_logistics_silver.dbo.silver_trucks", "lh_logistics_silver.DBO.silver_trucks")
         self.assert_fails(vr.check_warehouse_names(self.root), "must be spelled")
+
+    def test_unknown_ops_table(self):
+        self.edit_text(f"{rm.WAREHOUSE_DIR}/log/StoredProcedures/usp_reconcile_baselines.sql",
+                       "lh_logistics_ops.dbo.validation_driver_monthly_metrics",
+                       "lh_logistics_ops.dbo.validation_driver_metrics")
+        self.assert_fails(vr.check_warehouse_names(self.root), "validation_driver_metrics is not a table")
 
     def test_three_part_self_reference(self):
         self.edit_text(f"{rm.WAREHOUSE_DIR}/fact/StoredProcedures/usp_load_fact_trip.sql",

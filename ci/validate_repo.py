@@ -350,14 +350,14 @@ def check_readme_counts(root: Path) -> Result:
 
 # 6. Warehouse SQL names --------------------------------------------------------------
 
-THREE_PART = re.compile(r"\[?\b(lh_logistics_silver|wh_logistics_gold)\]?\s*\.\s*\[?(\w+)\]?\s*\.\s*\[?(\w+)\]?",
-                        re.I)
+THREE_PART = re.compile(r"\[?\b(lh_logistics_silver|lh_logistics_ops|wh_logistics_gold)\]?\s*\.\s*"
+                        r"\[?(\w+)\]?\s*\.\s*\[?(\w+)\]?", re.I)
 
 
 def check_warehouse_names(root: Path) -> Result:
-    result = Result("Warehouse SQL references silver tables that exist")
-    inventory = rm.silver_inventory(root)
-    seen = set()
+    result = Result("Warehouse SQL references lakehouse tables that exist")
+    inventory = rm.external_inventory(root)
+    seen = {db: set() for db in inventory}
     for path in rm.warehouse_sql_files(root):
         text = path.read_text(encoding="utf-8-sig")
         for match in THREE_PART.finditer(text):
@@ -367,15 +367,18 @@ def check_warehouse_names(root: Path) -> Result:
             if database.lower() == rm.GOLD_DATABASE:
                 result.fail(f"{where}: three-part self-reference {match.group(0)}; use schema.object")
                 continue
-            if database != rm.SILVER_DATABASE or schema != rm.SILVER_SCHEMA:
-                result.fail(f"{where}: {match.group(0)} must be spelled {rm.SILVER_DATABASE}.{rm.SILVER_SCHEMA}.<table>")
-            if table not in inventory:
-                close = [t for t in inventory if t.lower() == table.lower()]
+            if database not in inventory or schema != rm.SILVER_SCHEMA:
+                result.fail(f"{where}: {match.group(0)} must be spelled <lakehouse>.{rm.SILVER_SCHEMA}.<table>, "
+                            f"with the lakehouse in lower case")
+                continue
+            tables = inventory[database]
+            if table not in tables:
+                close = [t for t in tables if t.lower() == table.lower()]
                 hint = f" (did you mean {close[0]}?)" if close else ""
-                result.fail(f"{where}: {table} is not a silver table{hint}")
-            seen.add(table)
-    result.note(f"{len(inventory)} silver tables in {rm.SILVER_DDL_NOTEBOOK}; "
-                f"{len(seen)} referenced by the warehouse")
+                result.fail(f"{where}: {table} is not a table in {database}{hint}")
+            seen[database].add(table)
+    for database, tables in inventory.items():
+        result.note(f"{database}: {len(tables)} tables defined, {len(seen[database])} referenced by the warehouse")
     return result
 
 
