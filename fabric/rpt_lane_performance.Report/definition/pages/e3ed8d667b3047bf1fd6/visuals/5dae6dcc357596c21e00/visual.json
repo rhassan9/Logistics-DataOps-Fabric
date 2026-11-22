@@ -100,20 +100,6 @@
           "selector": {
             "id": "default"
           }
-        },
-        {
-          "properties": {
-            "labelDisplayUnits": {
-              "expr": {
-                "Literal": {
-                  "Value": "1D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "metadata": "Stop Event.Delivery Events"
-          }
         }
       ],
       "label": [

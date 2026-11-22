@@ -19,9 +19,9 @@
               {
                 "textRuns": [
                   {
-                    "value": "Contribution after fuel is not profit: the data has no driver pay, depreciation or overhead. Charges and miles are dated by dispatch, fuel by purchase date; 3.3% of fuel cost falls in a different month from its trip's dispatch, so monthly Contribution after Fuel and Fuel Cost per Mile are approximate and full-period figures are exact.",
+                    "value": "Contribution after fuel is not profit: the data has no driver pay, depreciation or overhead. Fuel purchases in this synthetic dataset do not follow trip distance (correlation 0.0002 across 85,410 trips; every trip buys about 287 gallons whether it runs 94 or 3,230 miles), while fuel used on the trip does (0.98). Contribution by route therefore mostly reflects lane length, and the shortest lanes show negative contribution. Charges and miles are dated by dispatch, fuel by purchase date.",
                     "textStyle": {
-                      "fontSize": "14pt"
+                      "fontSize": "12pt"
                     }
                   }
                 ],
