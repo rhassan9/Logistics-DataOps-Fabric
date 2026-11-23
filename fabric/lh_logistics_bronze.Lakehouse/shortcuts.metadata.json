@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "name": "landing",
+    "path": "/Files",
+    "target": {
+      "type": "AdlsGen2",
+      "adlsGen2": {
+        "connectionId": "f874b150-9e5b-4235-bb11-5397aeff4c36",
+        "location": "https://stlogisticslake.dfs.core.windows.net",
+        "subpath": "/landing/logistics"
+      }
+    }
+  }
+]
