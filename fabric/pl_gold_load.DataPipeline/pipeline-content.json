@@ -180,7 +180,7 @@
           "storedProcedureName": "[fact].[usp_load_fact_delivery_event]",
           "storedProcedureParameters": {
             "allow_mass_delete": {
-              "value": null,
+              "value": "false",
               "type": "Boolean"
             },
             "run_id": {
