@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_landing_gate_batch0",
+    "description": "Gate checks for landing batch 0 through the bronze shortcut"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "02f60dc9-ae06-43fc-a3e3-76102af35fd8"
+  }
+}
