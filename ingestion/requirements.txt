@@ -1,0 +1,5 @@
+# Generator and its tests. Python 3.10 or later.
+# pyarrow is pinned exactly: the generated Parquet bytes, and so the manifest
+# hashes, depend on its version, which every manifest records.
+pyarrow==26.0.1
+PyYAML==6.0.3
