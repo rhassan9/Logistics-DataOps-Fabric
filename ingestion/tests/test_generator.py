@@ -311,6 +311,33 @@ class Picks(GeneratorCase):
         _, rows = support.read_batch(self.landing, 1)
         self.assertEqual(rows["drivers"][0]["driver_id"], "DRV00003")
 
+    def test_random_pick_is_refused_as_an_insert_key(self):
+        for key in ("{pick: random}", "{pick: random, where: {trip_status: trip_status-1}}"):
+            with self.subTest(key=key):
+                self.assert_fails(f"""
+                    seed: 1
+                    batches:
+                      - {{batch_seq: 1, business_date: 2025-01-02, changes: [{{table: trips, op: INSERT, key: {key}, copy_from: TRI00001}}]}}
+                    """, "an INSERT key must be a literal key")
+
+    def test_random_copy_from_on_insert_works_for_every_seed(self):
+        for seed in range(20):
+            with self.subTest(seed=seed):
+                landing = self.tmp / f"landing_{seed}"
+                support.write_snapshot(landing)
+                gen.generate(self.config(f"""
+                    seed: {seed}
+                    batches:
+                      - batch_seq: 1
+                        business_date: 2025-01-02
+                        changes:
+                          - {{table: trips, op: INSERT, copy_from: {{pick: random, where: {{trip_status: trip_status-2}}}}}}
+                    """, name=f"seed_{seed}.yaml"), landing)
+                _, rows = support.read_batch(landing, 1)
+                (trip,) = rows["trips"]
+                self.assertEqual(trip["trip_id"], "TRI00007")
+                self.assertEqual(trip["load_id"], "load_id-2")
+
     def test_pick_with_no_candidate_fails(self):
         self.assert_fails("""
             seed: 1

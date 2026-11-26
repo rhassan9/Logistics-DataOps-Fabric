@@ -17,6 +17,9 @@ Rules it enforces (each one a contract rule):
   * _source_sequence starts at 1 per table and increases by 1 per event
   * UPDATE and DELETE need a live key; INSERT needs a key that is not live
     (a deleted key may be inserted again, which revives it)
+  * an INSERT key is literal (to revive that deleted key) or omitted (the
+    next new key); {pick: random} selects live keys, so it applies to UPDATE
+    and DELETE keys and to copy_from, never to an INSERT key
   * UPDATE carries the full new row image; DELETE carries the last row image
   * a drivers or trucks event happens on the batch business date
   * no event happens after the end of its batch business date
@@ -54,7 +57,7 @@ import yaml
 from ingestion import landing_contract as lc
 
 GENERATOR_NAME = "ingestion/fixtures/generator.py"
-GENERATOR_VERSION = "1.0.0"
+GENERATOR_VERSION = "1.0.1"
 TYPE2_TABLES = ("drivers", "trucks")
 VIOLATIONS = ("business_date_not_increasing", "type2_changed_at_not_business_date")
 INT32_RANGE = (-(2**31), 2**31 - 1)
@@ -396,8 +399,8 @@ def _rng(seed, batch_seq, index, purpose):
     return random.Random(f"{seed}:{batch_seq}:{index}:{purpose}")
 
 
-def _resolve_key(state, spec, rng, where, live_only=True):
-    """A literal key, or {pick: random, where: {column: value}} drawn with a seeded RNG."""
+def _resolve_key(state, spec, rng, where):
+    """A literal key, or a live key drawn by {pick: random, where: {column: value}} with a seeded RNG."""
     if isinstance(spec, str):
         return spec
     if isinstance(spec, dict) and spec.get("pick") == "random":
@@ -411,7 +414,7 @@ def _resolve_key(state, spec, rng, where, live_only=True):
         if wanted:
             candidates = state.matching_live_keys(wanted)
         else:
-            candidates = state.live_keys() if live_only else sorted(state.all_keys())
+            candidates = state.live_keys()
         if not candidates:
             raise FixtureError(f"{where}: no live {state.table} key matches {filters}")
         return rng.choice(candidates)
@@ -466,7 +469,11 @@ def build_batches(config, base):
 
             if op == "INSERT":
                 if "key" in change:
-                    key = _resolve_key(st, change["key"], rng, where, live_only=False)
+                    if not isinstance(change["key"], str):
+                        raise FixtureError(f"{where}: an INSERT key must be a literal key (to revive that "
+                                           "deleted key) or omitted (next new key); random picks select "
+                                           "live keys and apply to UPDATE, DELETE and copy_from")
+                    key = change["key"]
                 else:
                     key = st.next_key()
                 if st.is_live(key):
