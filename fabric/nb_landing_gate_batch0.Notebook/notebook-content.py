@@ -96,7 +96,6 @@ self_test_folder = "Files/landing_gate_self_test"   # scratch, in lh_logistics_o
 # Landing contract, version 1. Source of truth: ingestion/landing_contract.py.
 # Copied verbatim into the batch 0 notebooks; a unit test keeps the copies equal.
 import hashlib
-import time
 import json
 from datetime import date
 
@@ -511,7 +510,7 @@ def manifest_json(manifest):
 # ===========================================================================
 
 import hashlib
-
+import time
 from pyspark.sql import functions as F
 
 BRONZE_TABLE = "lh_logistics_bronze.dbo.bronze_{}"
