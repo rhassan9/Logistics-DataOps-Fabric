@@ -88,7 +88,7 @@ staging_root = "Files/landing_staging"
 # Landing contract, version 1. Source of truth: ingestion/landing_contract.py.
 # Copied verbatim into the batch 0 notebooks; a unit test keeps the copies equal.
 import hashlib
-import json
+import time
 from datetime import date
 
 CONTRACT_VERSION = "1"
@@ -665,10 +665,40 @@ def write_single_parquet(df, batch_dir, table):
     return final
 
 
-def file_digest(path):
-    """(bytes, sha256) of one file, read whole through Spark's binaryFile source."""
-    content = bytes(spark.read.format("binaryFile").load(path).select("content").first()["content"])
-    return len(content), hashlib.sha256(content).hexdigest()
+PARQUET_MAGIC = b"PAR1"
+
+
+def listed_size(path):
+    """Size in bytes of one file as the file system lists it."""
+    parent, name = path.rsplit("/", 1)
+    sizes = {i.name.rstrip("/"): i.size for i in notebookutils.fs.ls(parent)}
+    if name not in sizes:
+        raise RuntimeError(f"{path} is not listed in {parent}")
+    return sizes[name]
+
+
+def file_digest(path, attempts=4, wait_seconds=15):
+    """(bytes, sha256) of one complete Parquet file.
+
+    A read right after a write can return only part of the file, so a read
+    counts only when its length equals the listed size and it starts and ends
+    with the Parquet magic bytes. Otherwise the cached file status is refreshed
+    and the read is retried; after the last attempt the run stops rather than
+    record a hash of a partial file.
+    """
+    problem = ""
+    for attempt in range(1, attempts + 1):
+        expected = listed_size(path)
+        spark.catalog.refreshByPath(path)
+        content = bytes(spark.read.format("binaryFile").load(path).select("content").first()["content"])
+        if len(content) == expected and content[:4] == PARQUET_MAGIC and content[-4:] == PARQUET_MAGIC:
+            return len(content), hashlib.sha256(content).hexdigest()
+        problem = (f"read {len(content):,} bytes, listed size {expected:,}, "
+                   f"starts {content[:4]!r}, ends {content[-4:]!r}")
+        print(f"  {path}: incomplete read on attempt {attempt}: {problem}")
+        if attempt < attempts:
+            time.sleep(wait_seconds * attempt)
+    raise RuntimeError(f"{path}: no complete read after {attempts} attempts ({problem})")
 
 
 manifest_tables = {}
@@ -746,18 +776,36 @@ print(f"content hash    : {manifest['content_hash']}")
 # ===========================================================================
 # CELL 8 - UPLOAD COMMANDS (run on your machine as the working account)
 # ===========================================================================
-# Data files first, manifest last, never overwriting. AzCopy uses the identity
-# you signed in with for both OneLake and the storage account.
+# Batch 0 goes to landing through the working account's machine: download from
+# OneLake, check every file locally against the manifest, then upload the data
+# files and the manifest last, never overwriting. A server-side copy from
+# OneLake into stlogisticslake was refused (403 AuthorizationFailure); this
+# route changes no storage setting and checks the batch before it lands.
 
 workspace = "logistics-dataops-fabric"
 source = (f"https://onelake.dfs.fabric.microsoft.com/{workspace}/lh_logistics_ops.Lakehouse/"
           f"{BATCH_DIR}")
 target = "https://stlogisticslake.dfs.core.windows.net/landing/logistics"
+local = "$HOME/logistics-landing"
+folder = batch_folder(0)
+print("# 1. Sign in and download batch 0 to a folder outside the repository")
 print("azcopy login")
-print(f'azcopy copy "{source}" "{target}/" --recursive --exclude-pattern "{MANIFEST_NAME}" '
-      f'--overwrite false --trusted-microsoft-suffixes "fabric.microsoft.com"')
-print(f'azcopy copy "{source}/{MANIFEST_NAME}" "{target}/{batch_folder(0)}/{MANIFEST_NAME}" '
-      f'--overwrite false --trusted-microsoft-suffixes "fabric.microsoft.com"')
+print(f'mkdir -p {local}')
+print(f'azcopy copy "{source}" "{local}/" --recursive --trusted-microsoft-suffixes "fabric.microsoft.com"')
+print()
+print("# 2. Check it, from the repository root with ingestion/requirements.txt installed")
+print(f'python -c "from ingestion import landing_contract as lc; '
+      f'from ingestion.fixtures.generator import BaseSnapshot; '
+      f"b = BaseSnapshot.open('{local}'); "
+      f'[print(t, b.table(t).num_rows) for t in lc.TABLES]"')
+print()
+print("# 3. Upload the data files, then the manifest last")
+print(f'azcopy copy "{local}/{folder}" "{target}/" --recursive '
+      f'--exclude-pattern "{MANIFEST_NAME};.DS_Store" --overwrite false')
+print(f'azcopy copy "{local}/{folder}/{MANIFEST_NAME}" "{target}/{folder}/{MANIFEST_NAME}" --overwrite false')
+print()
+print("# 4. Expect exactly 13 files: 12 part-00000.parquet and the manifest")
+print(f'azcopy list "{target}/{folder}"')
 
 # METADATA ********************
 

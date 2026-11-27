@@ -96,6 +96,7 @@ self_test_folder = "Files/landing_gate_self_test"   # scratch, in lh_logistics_o
 # Landing contract, version 1. Source of truth: ingestion/landing_contract.py.
 # Copied verbatim into the batch 0 notebooks; a unit test keeps the copies equal.
 import hashlib
+import time
 import json
 from datetime import date
 
@@ -554,10 +555,73 @@ def entry_name(info):
     return info.name.rstrip("/")
 
 
-def file_digest(path):
-    """(bytes, sha256) of one file, read whole through Spark's binaryFile source."""
-    content = bytes(spark.read.format("binaryFile").load(path).select("content").first()["content"])
-    return len(content), hashlib.sha256(content).hexdigest()
+PARQUET_MAGIC = b"PAR1"
+
+
+def listed_size(path):
+    """Size in bytes of one file as the file system lists it."""
+    parent, name = path.rsplit("/", 1)
+    sizes = {i.name.rstrip("/"): i.size for i in notebookutils.fs.ls(parent)}
+    if name not in sizes:
+        raise RuntimeError(f"{path} is not listed in {parent}")
+    return sizes[name]
+
+
+def file_digest(path, attempts=4, wait_seconds=15):
+    """(bytes, sha256) of one complete Parquet file.
+
+    A read right after a write can return only part of the file, so a read
+    counts only when its length equals the listed size and it starts and ends
+    with the Parquet magic bytes. Otherwise the cached file status is refreshed
+    and the read is retried; after the last attempt the run stops rather than
+    record a hash of a partial file.
+    """
+    problem = ""
+    for attempt in range(1, attempts + 1):
+        expected = listed_size(path)
+        spark.catalog.refreshByPath(path)
+        content = bytes(spark.read.format("binaryFile").load(path).select("content").first()["content"])
+        if len(content) == expected and content[:4] == PARQUET_MAGIC and content[-4:] == PARQUET_MAGIC:
+            return len(content), hashlib.sha256(content).hexdigest()
+        problem = (f"read {len(content):,} bytes, listed size {expected:,}, "
+                   f"starts {content[:4]!r}, ends {content[-4:]!r}")
+        print(f"  {path}: incomplete read on attempt {attempt}: {problem}")
+        if attempt < attempts:
+            time.sleep(wait_seconds * attempt)
+    raise RuntimeError(f"{path}: no complete read after {attempts} attempts ({problem})")PARQUET_MAGIC = b"PAR1"
+
+
+def listed_size(path):
+    """Size in bytes of one file as the file system lists it."""
+    parent, name = path.rsplit("/", 1)
+    sizes = {i.name.rstrip("/"): i.size for i in notebookutils.fs.ls(parent)}
+    if name not in sizes:
+        raise RuntimeError(f"{path} is not listed in {parent}")
+    return sizes[name]
+
+
+def file_digest(path, attempts=4, wait_seconds=15):
+    """(bytes, sha256) of one complete Parquet file.
+
+    A read right after a write can return only part of the file, so a read
+    counts only when its length equals the listed size and it starts and ends
+    with the Parquet magic bytes. Otherwise the cached file status is refreshed
+    and the read is retried; after the last attempt the run stops rather than
+    record a hash of a partial file.
+    """
+    problem = ""
+    for attempt in range(1, attempts + 1):
+        expected = listed_size(path)
+        spark.catalog.refreshByPath(path)
+        content = bytes(spark.read.format("binaryFile").load(path).select("content").first()["content"])
+        if len(content) == expected and content[:4] == PARQUET_MAGIC and content[-4:] == PARQUET_MAGIC:
+            return len(content), hashlib.sha256(content).hexdigest()
+        problem = (f"read {len(content):,} bytes, listed size {expected:,}, "
+                   f"starts {content[:4]!r}, ends {content[-4:]!r}")
+        print(f"  {path}: incomplete read on attempt {attempt}: {problem}")
+        if attempt < attempts:
+            time.sleep(wait_seconds * attempt)
+    raise RuntimeError(f"{path}: no complete read after {attempts} attempts ({problem})")
 
 
 def spark_columns(schema):
@@ -610,7 +674,11 @@ def run_gate(root):
         for name, entry in wanted.items():
             if name not in present:
                 continue
-            size, digest = file_digest(f"{table_dir}/{name}")
+            try:
+                size, digest = file_digest(f"{table_dir}/{name}")
+            except RuntimeError as exc:
+                issues.append(str(exc))
+                continue
             if size != entry["bytes"]:
                 issues.append(f"{name}: {size} bytes, manifest {entry['bytes']}")
             if digest != entry["sha256"]:
