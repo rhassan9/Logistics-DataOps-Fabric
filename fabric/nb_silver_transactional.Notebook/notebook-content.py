@@ -100,6 +100,11 @@ ON_TIME_WINDOW_MINUTES = 120
 # and an update touches only _silver_updated_at.
 MERGE_MANAGED = {"_silver_created_at", "_silver_updated_at"}
 
+# Written only by nb_silver_apply_batch, which loads from landing batches. This
+# notebook leaves them untouched: null on rows it inserts, unchanged on rows it
+# updates.
+BATCH_LINEAGE = {"_source_batch_id", "_source_sequence"}
+
 LINEAGE = ["_ingest_date", "_ingested_at", "_source_system", "_load_mode"]
 
  
@@ -304,9 +309,11 @@ def set_dq_status(df, flag_columns):
 def align_to_target(df, target):
     """Project onto the target schema, failing on any mismatch.
  
-    MERGE_MANAGED columns are excluded: the MERGE supplies them.
+    MERGE_MANAGED columns are excluded: the MERGE supplies them. BATCH_LINEAGE
+    columns are excluded: this notebook does not write them.
     """
-    target_cols = [c for c in spark.table(target).columns if c not in MERGE_MANAGED]
+    target_cols = [c for c in spark.table(target).columns
+                   if c not in MERGE_MANAGED and c not in BATCH_LINEAGE]
     missing = set(target_cols) - set(df.columns)
     extra   = set(df.columns) - set(target_cols)
  

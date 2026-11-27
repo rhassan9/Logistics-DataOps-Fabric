@@ -56,8 +56,36 @@ jobs:
       - name: Install the landing contract and fixture generator dependencies
         run: python -m pip install --disable-pip-version-check -r ingestion/requirements.txt
 
-      - name: Test the landing contract, its notebook copies and the fixture generator
+      - name: Test the landing contract, batch discovery, the notebook copies and the fixture generator
         run: python -m unittest discover -s ingestion/tests -t . -v
+
+  spark-tests:
+    name: Silver routine on local Spark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13 (the Python of Fabric Runtime 2.0)
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Use the runner's Java 21 (the Java of Fabric Runtime 2.0)
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          "$JAVA_HOME_21_X64/bin/java" -version
+
+      - name: Install PySpark and the ingestion dependencies
+        run: python -m pip install --disable-pip-version-check -r ingestion/requirements-spark.txt
+
+      - name: Test the silver routine (transform parity, row hashes, snapshot guard, recovery)
+        env:
+          TZ: UTC
+        run: python -m unittest ingestion.tests.test_silver_routine -v
 
   warehouse-build:
     name: Warehouse SQL build

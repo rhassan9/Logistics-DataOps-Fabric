@@ -22,7 +22,7 @@
 
 # CELL ********************
 
-# Silver — Table Definitions
+# Silver - Table Definitions
 #
 # Destination : lh_logistics_silver
 # Scope       : all 12 silver tables
@@ -78,10 +78,11 @@
 # PARAMETERS CELL ********************
 
 # ===========================================================================
-# CELL 1 — PARAMETERS  
+# CELL 1 - PARAMETERS  
 # ===========================================================================
  
-drop_existing = True   # True rebuilds every table. Destroys all silver data.
+drop_existing = False   # True drops and rebuilds every table, destroying all silver data.
+                        # Set it only for a deliberate rebuild of an empty environment.
 
 
 # METADATA ********************
@@ -94,7 +95,7 @@ drop_existing = True   # True rebuilds every table. Destroys all silver data.
 # CELL ********************
 
 # ===========================================================================
-# CELL 2 — CONFIGURATION
+# CELL 2 - CONFIGURATION
 # ===========================================================================
  
 SILVER_LAKEHOUSE = "lh_logistics_silver"
@@ -136,6 +137,10 @@ TBLPROPERTIES (
 #                       row is kept with its last known values
 # _source_changed_at    when the current state took effect at the source, as
 #                       precisely as ingestion can observe it
+# _source_batch_id      the landing batch that last wrote the row; null on rows
+#                       not written since batch-driven loading began
+# _source_sequence      the source sequence of the state the row holds; 0 for a
+#                       snapshot batch, null where _source_batch_id is null
 AUDIT_COLUMNS = """
     _source_ingest_date       STRING,
     _silver_created_at        TIMESTAMP,
@@ -143,7 +148,9 @@ AUDIT_COLUMNS = """
     _silver_run_id            STRING,
     _dq_status                STRING,
     _is_deleted_in_source     BOOLEAN,
-    _source_changed_at        TIMESTAMP
+    _source_changed_at        TIMESTAMP,
+    _source_batch_id          STRING,
+    _source_sequence          BIGINT
 """
  
 print(f"target: {SILVER_LAKEHOUSE}")
@@ -158,7 +165,7 @@ print(f"target: {SILVER_LAKEHOUSE}")
 # CELL ********************
 
 # ===========================================================================
-# CELL 3 — REFERENCE TABLES
+# CELL 3 - REFERENCE TABLES
 # ===========================================================================
 # Written by Dataflow Gen2. Six tables, 758 rows in total.
 #
@@ -286,7 +293,7 @@ REFERENCE_TABLES = {
 # CELL ********************
 
 # ===========================================================================
-# CELL 4 — TRANSACTIONAL TABLES
+# CELL 4 - TRANSACTIONAL TABLES
 # ===========================================================================
 # Written by nb_silver_transactional. Six tables, 541,172 rows in total.
 #
@@ -452,7 +459,7 @@ TRANSACTIONAL_TABLES = {
 # CELL ********************
 
 # ===========================================================================
-# CELL 5 — CREATE
+# CELL 5 - CREATE
 # ===========================================================================
  
 ALL_TABLES = {**REFERENCE_TABLES, **TRANSACTIONAL_TABLES}
@@ -502,11 +509,59 @@ for n in existing:
 # CELL ********************
 
 # ===========================================================================
-# CELL 6 — VERIFY
+# CELL 6 - ADD COLUMNS MISSING FROM EXISTING TABLES
+# ===========================================================================
+# CELL 5 leaves an existing table as it is, so a column added to the
+# definitions above reaches existing tables here, as nullable and additive,
+# with no row rewritten. Existing rows hold null in it. Running the cell
+# again adds nothing.
+#
+# Only columns at the end of a definition can be added this way, in order;
+# anything else is a mismatch for CELL 7 to report.
+
+import re
+
+added, skipped = {}, []
+for name, columns in ALL_TABLES.items():
+    target = f"{SILVER_LAKEHOUSE}.{SILVER_SCHEMA}.{SILVER_PREFIX}{name}"
+    defined = [
+        (m.group(1), m.group(2))
+        for m in (re.match(r"\s*([A-Za-z_]\w*)\s+([A-Z]+(?:\(\d+,\s*\d+\))?)", line)
+                  for line in columns.splitlines())
+        if m
+    ]
+    present = spark.table(target).columns
+    if [c for c, _ in defined[:len(present)]] != present:
+        skipped.append(name)
+        continue
+    missing = defined[len(present):]
+    if missing:
+        spark.sql(f"ALTER TABLE {target} ADD COLUMNS ("
+                  + ", ".join(f"{c} {t}" for c, t in missing) + ")")
+        added[name] = [c for c, _ in missing]
+
+print(f"tables changed: {len(added)}")
+for name, cols in added.items():
+    print(f"  {name}: added {', '.join(cols)}")
+if skipped:
+    print(f"not changed, existing columns differ from the definition: {', '.join(skipped)}")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# ===========================================================================
+# CELL 7 - VERIFY
 # ===========================================================================
 # Change data feed must be active on every table before any row is written.
 # A table missing the property has to be dropped and recreated: enabling it
-# later leaves everything already loaded outside the feed.
+# later leaves everything already loaded outside the feed. Every table's
+# columns must also equal its definition above, in order.
  
 from pyspark.sql import functions as F
  
@@ -527,6 +582,11 @@ for name in ALL_TABLES:
  
     expected_cdf = name not in REFERENCE_TABLES
 
+    defined = [m.group(1) for m in (re.match(r"\s*([A-Za-z_]\w*)\s+[A-Z]", line)
+                                     for line in ALL_TABLES[name].splitlines()) if m]
+    if spark.table(target).columns != defined:
+        problems.append(f"{name} (columns differ from the definition)")
+
     if expected_cdf and cdf != "true":
         problems.append(f"{name} (CDF missing)")
 
@@ -537,8 +597,8 @@ for name in ALL_TABLES:
  
 print("-" * 65)
 print("All tables ready." if not problems
-      else f"Change data feed missing on: {', '.join(problems)}. "
-           f"Drop and recreate those tables before loading.")
+      else f"Not ready: {', '.join(problems)}. A missing change data feed needs "
+           f"the table dropped and recreated before loading.")
 
 
 # METADATA ********************
@@ -551,7 +611,7 @@ print("All tables ready." if not problems
 # CELL ********************
 
 # ===========================================================================
-# CELL 7 — NOTES FOR THE DATAFLOW GEN2 AUTHOR
+# CELL 8 - NOTES FOR THE DATAFLOW GEN2 AUTHOR
 # ===========================================================================
 # The six reference tables are written by Dataflow Gen2 against the schemas
 # defined above.
@@ -569,16 +629,16 @@ print("All tables ready." if not problems
 #
 #        tenure_days             datediff(coalesce(termination_date,
 #                                                  as_of_date), hire_date)
-#        age_at_hire             years between date_of_birth and hire_date
+#        age_at_hire             year(hire_date) - year(date_of_birth)
 #        truck_age_years_as_of   year(as_of_date) - model_year
 #        trailer_age_years_as_of year(as_of_date) - model_year
-#        route_name              origin_city + ' to ' + destination_city
+#        route_name              origin_city + ' → ' + destination_city
 #        is_centroid_coordinate  true for every row
 #
 #   4. Audit columns: set _dq_status to 'valid', _source_ingest_date from the
 #      bronze row, and both timestamps to the run time.
 #
-# After the first Dataflow run, re-run CELL 6 to confirm the table properties survived.
+# After the first Dataflow run, re-run CELL 7 to confirm the table properties survived.
  
 print("See cell source for Dataflow Gen2 requirements.")
 

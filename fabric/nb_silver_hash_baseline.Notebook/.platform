@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_silver_hash_baseline",
+    "description": "Captures and compares per-key row hashes of the silver tables"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "050dbe56-1268-4404-91c2-0b6135d6d383"
+  }
+}

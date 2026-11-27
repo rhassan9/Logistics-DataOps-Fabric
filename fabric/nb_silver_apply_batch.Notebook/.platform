@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_silver_apply_batch",
+    "description": "Applies one claimed landing batch to the silver tables"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "591afd93-d8af-4b45-83c6-7bced9943a90"
+  }
+}

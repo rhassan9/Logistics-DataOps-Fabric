@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_batch_discover",
+    "description": "Registers landed batches in the warehouse batch registry"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "46bae2b0-ea5a-4c86-b20c-fd636574706e"
+  }
+}

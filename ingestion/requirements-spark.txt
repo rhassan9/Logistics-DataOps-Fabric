@@ -1,0 +1,5 @@
+# Silver routine tests (ingestion/tests/test_silver_routine.py): a local Spark
+# session with the Spark of Fabric Runtime 2.0 (Apache Spark 4.1.1, Java 21,
+# Python 3.13). Java comes from the runner.
+-r requirements.txt
+pyspark==4.1.1
