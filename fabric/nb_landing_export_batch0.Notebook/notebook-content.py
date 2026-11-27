@@ -89,6 +89,7 @@ staging_root = "Files/landing_staging"
 # Copied verbatim into the batch 0 notebooks; a unit test keeps the copies equal.
 import hashlib
 import time
+import json
 from datetime import date
 
 CONTRACT_VERSION = "1"
